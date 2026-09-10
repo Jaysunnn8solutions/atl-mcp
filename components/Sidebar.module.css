@@ -1,0 +1,244 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+  overflow-y: auto;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.sidebar h1 {
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
+}
+
+.sidebar h2 {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.sidebar h3 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 12px 0 6px;
+}
+
+.header p,
+.blurb {
+  color: var(--text-secondary);
+  margin: 6px 0 8px;
+}
+
+.segmented {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.segmented button {
+  flex: 1;
+  padding: 7px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.segmented button + button {
+  border-left: 1px solid var(--border);
+}
+
+.segmented button:hover {
+  background: var(--hover);
+}
+
+.segmented button.active {
+  background: var(--text-primary);
+  color: var(--surface);
+  font-weight: 600;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.check input {
+  accent-color: var(--accent);
+}
+
+.range {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.range span {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 2px;
+}
+
+.range strong {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.range em {
+  font-style: normal;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.range input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--page);
+}
+
+.tileValue {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.tileLabel {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.spinner {
+  font-size: 11px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.table th {
+  text-align: right;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.table th:first-child,
+.table td:first-child {
+  text-align: left;
+}
+
+.table td {
+  text-align: right;
+  padding: 5px 6px;
+  border-bottom: 1px solid var(--grid);
+}
+
+.detail {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--page);
+}
+
+.detailHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.detailHead h2 {
+  font-size: 15px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.detailHead button {
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 12px;
+  row-gap: 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.facts dt {
+  color: var(--text-secondary);
+}
+
+.facts dd {
+  text-align: right;
+}
+
+.factRow {
+  display: contents;
+}
+
+.footer {
+  margin-top: auto;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.footer a {
+  text-decoration: underline;
+}
+
+.footer code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}

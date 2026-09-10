@@ -1,0 +1,25 @@
+{
+  "generatedAt": "2026-09-10T01:44:33.905Z",
+  "acsVintage": 2024,
+  "acsPriorVintage": 2019,
+  "boundaryVintage": 2024,
+  "counties": [
+    {
+      "fips": "121",
+      "name": "Fulton"
+    },
+    {
+      "fips": "089",
+      "name": "DeKalb"
+    },
+    {
+      "fips": "063",
+      "name": "Clayton"
+    }
+  ],
+  "counts": {
+    "tracts": 600,
+    "pois": 1411,
+    "stops": 6837
+  }
+}
