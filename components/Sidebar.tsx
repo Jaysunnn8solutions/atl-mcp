@@ -1,9 +1,28 @@
 "use client";
 
-import type { AnalysisResult, TractProps, TractResult } from "@/lib/analysis/types";
+import { useState, type FormEvent } from "react";
+import type {
+  AccessDomain,
+  AnalysisResult,
+  FacilitySpec,
+  TractProps,
+  TractResult,
+} from "@/lib/analysis/types";
+import type { CoverageResult } from "@/lib/analysis/coverage";
+import type { GeoMatch } from "@/lib/geocode";
+import type { Overlays, MapPoint } from "./GapMap";
 import { Legend } from "./Legend";
-import type { Overlays } from "./GapMap";
-import { fmtMoney, fmtNum, fmtPct, fmtZ, MODES, type Mode } from "./scales";
+import {
+  DOMAIN_COLORS,
+  DOMAIN_LABELS,
+  fmtCompact,
+  fmtMoney,
+  fmtNum,
+  fmtPct,
+  fmtZ,
+  MODES,
+  type Mode,
+} from "./scales";
 import styles from "./Sidebar.module.css";
 
 export interface Params {
@@ -16,6 +35,8 @@ export interface Params {
   wGrowth: number;
 }
 
+const DOMAINS: AccessDomain[] = ["grocery", "pharmacy", "clinic", "transit"];
+
 interface Props {
   mode: Mode;
   onMode: (m: Mode) => void;
@@ -26,9 +47,29 @@ interface Props {
   overlays: Overlays;
   onOverlays: (o: Overlays) => void;
   analysis: AnalysisResult | null;
+  scenarioAnalysis: AnalysisResult | null;
   loading: boolean;
-  selected: { props: TractProps; result: TractResult | undefined } | null;
+  selected: { props: TractProps; result: TractResult | undefined; baseline: TractResult | undefined } | null;
   onClearSelection: () => void;
+  // Search
+  onSearch: (q: string) => Promise<GeoMatch[]>;
+  onGoTo: (p: MapPoint) => void;
+  // Coverage
+  coverageDomain: AccessDomain;
+  onCoverageDomain: (d: AccessDomain) => void;
+  minTph: number;
+  onMinTph: (n: number) => void;
+  coverage: CoverageResult | null;
+  // Scenario
+  scenario: FacilitySpec[];
+  placing: AccessDomain | null;
+  onPlacing: (d: AccessDomain | null) => void;
+  onRemoveFacility: (i: number) => void;
+  onClearScenario: () => void;
+  onSuggestSites: (domain: AccessDomain, k: number) => Promise<void>;
+  suggesting: boolean;
+  // Export
+  onExport: (kind: "csv" | "geojson") => void;
 }
 
 const WEIGHTS: Array<{ key: keyof Params; label: string }> = [
@@ -48,8 +89,10 @@ const CLUSTER_WORDS: Record<TractResult["lisa"]["cluster"], string> = {
 };
 
 export function Sidebar(props: Props) {
-  const { mode, onMode, params, onParams, analysis, loading, selected } = props;
+  const { mode, onMode, params, onParams, analysis, scenarioAnalysis, loading, selected } = props;
   const modeInfo = MODES.find((m) => m.id === mode)!;
+  const scenarioActive = props.scenario.length > 0;
+  const modes = MODES.filter((m) => m.id !== "delta" || scenarioActive);
 
   return (
     <aside className={styles.sidebar}>
@@ -61,9 +104,11 @@ export function Sidebar(props: Props) {
         </p>
       </header>
 
+      <SearchBox onSearch={props.onSearch} onGoTo={props.onGoTo} />
+
       <section>
-        <div className={styles.segmented} role="tablist" aria-label="Map layer">
-          {MODES.map((m) => (
+        <div className={`${styles.segmented} ${styles.wrap}`} role="tablist" aria-label="Map layer">
+          {modes.map((m) => (
             <button
               key={m.id}
               role="tab"
@@ -76,27 +121,51 @@ export function Sidebar(props: Props) {
           ))}
         </div>
         <p className={styles.blurb}>{modeInfo.blurb}</p>
-        <Legend mode={mode} showPriority={props.showPriority} />
-        <label className={styles.check}>
-          <input
-            type="checkbox"
-            checked={props.showPriority}
-            onChange={(e) => props.onShowPriority(e.target.checked)}
+        {mode === "coverage" && (
+          <CoverageControls
+            domain={props.coverageDomain}
+            onDomain={props.onCoverageDomain}
+            minTph={props.minTph}
+            onMinTph={props.onMinTph}
+            coverage={props.coverage}
+            onGoTo={props.onGoTo}
           />
-          Outline priority tracts
-        </label>
+        )}
+        <Legend mode={mode} showPriority={props.showPriority} />
+        {mode !== "coverage" && (
+          <label className={styles.check}>
+            <input
+              type="checkbox"
+              checked={props.showPriority}
+              onChange={(e) => props.onShowPriority(e.target.checked)}
+            />
+            Outline priority tracts
+          </label>
+        )}
       </section>
 
       {selected ? (
         <TractDetail
           p={selected.props}
           r={selected.result}
+          baseline={selected.baseline}
+          scenarioActive={scenarioActive}
           vintages={analysis?.dataVintages}
           onClose={props.onClearSelection}
         />
       ) : (
-        <Summary analysis={analysis} loading={loading} />
+        <Summary analysis={analysis} scenario={scenarioAnalysis} loading={loading} />
       )}
+
+      <ScenarioPanel
+        scenario={props.scenario}
+        placing={props.placing}
+        onPlacing={props.onPlacing}
+        onRemove={props.onRemoveFacility}
+        onClear={props.onClearScenario}
+        onSuggest={props.onSuggestSites}
+        suggesting={props.suggesting}
+      />
 
       <section>
         <h2>Catchment</h2>
@@ -167,6 +236,22 @@ export function Sidebar(props: Props) {
         ))}
       </section>
 
+      <section>
+        <h2>Export</h2>
+        <div className={styles.buttonRow}>
+          <button className={styles.button} onClick={() => props.onExport("csv")} disabled={!analysis}>
+            CSV
+          </button>
+          <button className={styles.button} onClick={() => props.onExport("geojson")} disabled={!analysis}>
+            GeoJSON
+          </button>
+        </div>
+        <p className={styles.blurb}>
+          Current results{scenarioActive ? " (scenario applied)" : ""}, one row per tract. The URL
+          carries the view, so it can be shared as is.
+        </p>
+      </section>
+
       <footer className={styles.footer}>
         <p>
           Screening tool, not a recommendation. ACS {analysis?.dataVintages.acs ?? "…"} and{" "}
@@ -179,7 +264,236 @@ export function Sidebar(props: Props) {
   );
 }
 
-function Summary({ analysis, loading }: { analysis: AnalysisResult | null; loading: boolean }) {
+function SearchBox({
+  onSearch,
+  onGoTo,
+}: {
+  onSearch: (q: string) => Promise<GeoMatch[]>;
+  onGoTo: (p: MapPoint) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [matches, setMatches] = useState<GeoMatch[] | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (q.trim().length < 2) return;
+    setBusy(true);
+    try {
+      const m = await onSearch(q.trim());
+      setMatches(m);
+      if (m.length === 1) {
+        onGoTo({ lon: m[0].lon, lat: m[0].lat, label: m[0].label });
+        setMatches(null);
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section>
+      <form onSubmit={submit} className={styles.search}>
+        <input
+          type="search"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search a neighbourhood, address or station"
+          aria-label="Search a place"
+        />
+        <button type="submit" className={styles.button} disabled={busy}>
+          {busy ? "…" : "Go"}
+        </button>
+      </form>
+      {matches && matches.length === 0 && <p className={styles.blurb}>Nothing found inside metro Atlanta.</p>}
+      {matches && matches.length > 1 && (
+        <ul className={styles.matches}>
+          {matches.map((m) => (
+            <li key={`${m.lat},${m.lon}`}>
+              <button
+                className={styles.linkButton}
+                onClick={() => {
+                  onGoTo({ lon: m.lon, lat: m.lat, label: m.label });
+                  setMatches(null);
+                }}
+              >
+                {m.label}
+                {m.kind ? <span className={styles.muted}> · {m.kind}</span> : null}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function CoverageControls({
+  domain,
+  onDomain,
+  minTph,
+  onMinTph,
+  coverage,
+  onGoTo,
+}: {
+  domain: AccessDomain;
+  onDomain: (d: AccessDomain) => void;
+  minTph: number;
+  onMinTph: (n: number) => void;
+  coverage: CoverageResult | null;
+  onGoTo: (p: MapPoint) => void;
+}) {
+  const share = coverage && coverage.totalPop > 0 ? (coverage.coveredPop / coverage.totalPop) * 100 : null;
+  return (
+    <div className={styles.subpanel}>
+      <div className={styles.segmented}>
+        {DOMAINS.map((d) => (
+          <button key={d} className={domain === d ? styles.active : ""} onClick={() => onDomain(d)}>
+            {DOMAIN_LABELS[d].replace(" stop", "")}
+          </button>
+        ))}
+      </div>
+      {domain === "transit" && (
+        <label className={styles.range}>
+          <span>
+            Minimum service <strong>{minTph} trips/hr</strong>
+          </span>
+          <input type="range" min={0} max={20} step={1} value={minTph} onChange={(e) => onMinTph(Number(e.target.value))} />
+        </label>
+      )}
+      {coverage && share != null && (
+        <>
+          <div className={styles.tiles}>
+            <div className={styles.tile}>
+              <span className={styles.tileValue}>{share.toFixed(0)}%</span>
+              <span className={styles.tileLabel}>residents covered</span>
+            </div>
+            <div className={styles.tile}>
+              <span className={styles.tileValue}>{fmtCompact(coverage.totalPop - coverage.coveredPop)}</span>
+              <span className={styles.tileLabel}>residents uncovered</span>
+            </div>
+            <div className={styles.tile}>
+              <span className={styles.tileValue}>{coverage.clusters.length}</span>
+              <span className={styles.tileLabel}>holes</span>
+            </div>
+          </div>
+          {coverage.clusters.length > 0 && (
+            <ul className={styles.holes}>
+              {coverage.clusters.slice(0, 5).map((c) => (
+                <li key={c.rank}>
+                  <button
+                    className={styles.linkButton}
+                    onClick={() => onGoTo({ lon: c.lon, lat: c.lat, label: `Hole #${c.rank}` })}
+                  >
+                    <strong>#{c.rank}</strong> {fmtCompact(c.pop)} residents · {c.tracts.length} tract
+                    {c.tracts.length === 1 ? "" : "s"} · {Object.keys(c.counties).join("/")}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function ScenarioPanel({
+  scenario,
+  placing,
+  onPlacing,
+  onRemove,
+  onClear,
+  onSuggest,
+  suggesting,
+}: {
+  scenario: FacilitySpec[];
+  placing: AccessDomain | null;
+  onPlacing: (d: AccessDomain | null) => void;
+  onRemove: (i: number) => void;
+  onClear: () => void;
+  onSuggest: (domain: AccessDomain, k: number) => Promise<void>;
+  suggesting: boolean;
+}) {
+  const [suggestDomain, setSuggestDomain] = useState<AccessDomain>("clinic");
+  const [k, setK] = useState(3);
+  return (
+    <section>
+      <h2>Scenario</h2>
+      <p className={styles.blurb}>
+        Pick a type, then click the map to place a hypothetical facility. Or let the solver
+        propose sites that cover the most uncovered need.
+      </p>
+      <div className={styles.chips}>
+        {DOMAINS.map((d) => (
+          <button
+            key={d}
+            className={`${styles.chip} ${placing === d ? styles.chipActive : ""}`}
+            style={{ ["--chip" as string]: DOMAIN_COLORS[d] }}
+            onClick={() => onPlacing(placing === d ? null : d)}
+          >
+            <span className={styles.dot} />
+            {DOMAIN_LABELS[d]}
+          </button>
+        ))}
+      </div>
+      {placing && <p className={styles.blurb}>Click the map to add a {DOMAIN_LABELS[placing].toLowerCase()}. Click the chip again to stop.</p>}
+      <div className={styles.suggest}>
+        <select value={suggestDomain} onChange={(e) => setSuggestDomain(e.target.value as AccessDomain)} aria-label="Supply type to suggest">
+          {DOMAINS.map((d) => (
+            <option key={d} value={d}>
+              {DOMAIN_LABELS[d]}
+            </option>
+          ))}
+        </select>
+        <select value={k} onChange={(e) => setK(Number(e.target.value))} aria-label="Number of sites">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <option key={n} value={n}>
+              {n} site{n > 1 ? "s" : ""}
+            </option>
+          ))}
+        </select>
+        <button className={styles.button} onClick={() => onSuggest(suggestDomain, k)} disabled={suggesting}>
+          {suggesting ? "Solving…" : "Suggest"}
+        </button>
+      </div>
+      {scenario.length > 0 && (
+        <>
+          <ul className={styles.facilities}>
+            {scenario.map((f, i) => (
+              <li key={`${i}-${f.lat}-${f.lon}`}>
+                <span className={styles.dot} style={{ background: DOMAIN_COLORS[f.domain] }} />
+                <span className={styles.facilityLabel}>
+                  {f.label ?? DOMAIN_LABELS[f.domain]}
+                  <span className={styles.muted}>
+                    {" "}
+                    {f.lat.toFixed(3)}, {f.lon.toFixed(3)}
+                  </span>
+                </span>
+                <button className={styles.iconButton} onClick={() => onRemove(i)} aria-label="Remove facility">
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button className={styles.linkButton} onClick={onClear}>
+            Clear scenario
+          </button>
+        </>
+      )}
+    </section>
+  );
+}
+
+function Summary({
+  analysis,
+  scenario,
+  loading,
+}: {
+  analysis: AnalysisResult | null;
+  scenario: AnalysisResult | null;
+  loading: boolean;
+}) {
   if (!analysis) {
     return (
       <section>
@@ -188,24 +502,40 @@ function Summary({ analysis, loading }: { analysis: AnalysisResult | null; loadi
       </section>
     );
   }
-  const s = analysis.summary;
+  const shown = scenario ?? analysis;
+  const s = shown.summary;
+  const arrow = (a: number, b: number, digits = 0) =>
+    scenario ? (
+      <span className={styles.muted}>
+        {" "}
+        {a.toFixed(digits)} →
+      </span>
+    ) : null;
   return (
     <section aria-busy={loading}>
-      <h2>Summary {loading && <span className={styles.spinner}>updating</span>}</h2>
+      <h2>
+        Summary{scenario && <span className={styles.spinner}>scenario</span>}
+        {loading && <span className={styles.spinner}>updating</span>}
+      </h2>
       <div className={styles.tiles}>
         <div className={styles.tile}>
-          <span className={styles.tileValue}>{s.priorityCount}</span>
+          <span className={styles.tileValue}>
+            {arrow(analysis.summary.priorityCount, s.priorityCount)}
+            {s.priorityCount}
+          </span>
           <span className={styles.tileLabel}>priority tracts</span>
         </div>
         <div className={styles.tile}>
-          <span className={styles.tileValue}>{s.hotspotCount}</span>
+          <span className={styles.tileValue}>
+            {arrow(analysis.summary.hotspotCount, s.hotspotCount)}
+            {s.hotspotCount}
+          </span>
           <span className={styles.tileLabel}>in high-gap clusters</span>
         </div>
         <div className={styles.tile}>
-          <span className={styles.tileValue}>{analysis.global.I.toFixed(2)}</span>
+          <span className={styles.tileValue}>{shown.global.I.toFixed(2)}</span>
           <span className={styles.tileLabel}>
-            Moran&apos;s I{" "}
-            {analysis.global.p < 0.01 ? "(p < 0.01)" : `(p = ${analysis.global.p.toFixed(2)})`}
+            Moran&apos;s I {shown.global.p < 0.01 ? "(p < 0.01)" : `(p = ${shown.global.p.toFixed(2)})`}
           </span>
         </div>
       </div>
@@ -245,11 +575,15 @@ function change(cur: number | null, prior: number | null): string {
 function TractDetail({
   p,
   r,
+  baseline,
+  scenarioActive,
   vintages,
   onClose,
 }: {
   p: TractProps;
   r: TractResult | undefined;
+  baseline: TractResult | undefined;
+  scenarioActive: boolean;
   vintages: AnalysisResult["dataVintages"] | undefined;
   onClose: () => void;
 }) {
@@ -272,7 +606,10 @@ function TractDetail({
           </div>
           <div className={styles.tile}>
             <span className={styles.tileValue}>{fmtZ(r.access)}</span>
-            <span className={styles.tileLabel}>access · tertile {r.accessTertile}</span>
+            <span className={styles.tileLabel}>
+              access · tertile {r.accessTertile}
+              {scenarioActive && baseline ? ` · was ${fmtZ(baseline.access)}` : ""}
+            </span>
           </div>
           <div className={styles.tile}>
             <span className={styles.tileValue}>{fmtZ(r.gap)}</span>

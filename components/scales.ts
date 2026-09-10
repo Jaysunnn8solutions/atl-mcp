@@ -5,9 +5,10 @@
  * slots for clusters. Text never wears a series colour.
  */
 
+import type { AccessDomain } from "@/lib/analysis/types";
 import type { Cluster } from "@/lib/spatial/moran";
 
-export type Mode = "gap" | "need" | "access" | "growth" | "clusters";
+export type Mode = "gap" | "need" | "access" | "growth" | "clusters" | "coverage" | "delta";
 
 export const MODES: Array<{ id: Mode; label: string; blurb: string }> = [
   {
@@ -19,6 +20,8 @@ export const MODES: Array<{ id: Mode; label: string; blurb: string }> = [
   { id: "access", label: "Access", blurb: "Catchment accessibility to groceries, pharmacies, clinics and transit." },
   { id: "growth", label: "Growth", blurb: "Population change 2019 to 2024, apportioned onto 2020 tracts." },
   { id: "clusters", label: "Clusters", blurb: "Local Moran's I on the gap. Where high gaps sit next to high gaps." },
+  { id: "coverage", label: "Coverage", blurb: "Tracts with no supply of one type within the radius, grouped into contiguous holes." },
+  { id: "delta", label: "Δ Access", blurb: "Change in the access index from the scenario, compared with the baseline." },
 ];
 
 export interface Bin {
@@ -65,6 +68,15 @@ export const GROWTH_BINS: Bin[] = [
   { label: "grew more than 25%", color: "#1c5cab" },
 ];
 
+/** Diverging: blue = access improved under the scenario. */
+export const DELTA_BINS: Bin[] = [
+  { label: "fell by more than 0.5", color: "#b83232", upto: -0.5 },
+  { label: "fell", color: "#f2a4a3", upto: -0.05 },
+  { label: "no change", color: "#f0efec", upto: 0.05 },
+  { label: "rose", color: "#9ec5f4", upto: 0.5 },
+  { label: "rose by more than 0.5", color: "#1c5cab" },
+];
+
 export const CLUSTER_COLORS: Record<Cluster, string> = {
   HH: "#eb6834",
   LL: "#2a78d6",
@@ -80,6 +92,33 @@ export const CLUSTER_BINS: Bin[] = [
   { label: "low gap, high neighbours (LH)", color: CLUSTER_COLORS.LH },
   { label: "not significant", color: CLUSTER_COLORS.ns },
 ];
+
+export const COVERAGE_COLORS = {
+  covered: NEUTRAL,
+  uncovered: ORANGE[2],
+  topCluster: ORANGE[3],
+};
+
+export const COVERAGE_BINS: Bin[] = [
+  { label: "covered", color: COVERAGE_COLORS.covered },
+  { label: "uncovered", color: COVERAGE_COLORS.uncovered },
+  { label: "uncovered, in one of the three largest holes", color: COVERAGE_COLORS.topCluster },
+];
+
+/** Point colours for supply overlays and scenario facilities (categorical slots). */
+export const DOMAIN_COLORS: Record<AccessDomain, string> = {
+  grocery: "#008300",
+  pharmacy: "#4a3aa7",
+  clinic: "#e87ba4",
+  transit: "#2a78d6",
+};
+
+export const DOMAIN_LABELS: Record<AccessDomain, string> = {
+  grocery: "Grocery",
+  pharmacy: "Pharmacy",
+  clinic: "Clinic",
+  transit: "Transit stop",
+};
 
 export function binColor(value: number | null | undefined, bins: Bin[]): string {
   if (value == null || Number.isNaN(value)) return NO_DATA;
@@ -99,6 +138,10 @@ export function binsFor(mode: Mode): Bin[] {
       return GROWTH_BINS;
     case "clusters":
       return CLUSTER_BINS;
+    case "coverage":
+      return COVERAGE_BINS;
+    case "delta":
+      return DELTA_BINS;
     default:
       return GAP_BINS;
   }
@@ -115,7 +158,15 @@ export function fmtMoney(x: number | null | undefined): string {
 }
 
 export function fmtNum(x: number | null | undefined): string {
-  return x == null ? "n/a" : x.toLocaleString("en-US");
+  return x == null ? "n/a" : Math.round(x).toLocaleString("en-US");
+}
+
+/** Compact figure for stat tiles: 1,244,337 → "1.24M", 31,944 → "31.9k". */
+export function fmtCompact(x: number): string {
+  const abs = Math.abs(x);
+  if (abs >= 1e6) return `${(x / 1e6).toFixed(2)}M`;
+  if (abs >= 1e4) return `${(x / 1e3).toFixed(1)}k`;
+  return Math.round(x).toLocaleString("en-US");
 }
 
 export function fmtZ(x: number): string {

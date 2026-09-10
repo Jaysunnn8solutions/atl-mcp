@@ -6,22 +6,24 @@
  * network, so a run is a few hundred milliseconds and safe to do per request.
  */
 
-import { twoStepFca, type Demand, type Supply } from "../spatial/catchment";
+import { twoStepFca, type Demand } from "../spatial/catchment";
 import { globalMoran, localMoran } from "../spatial/moran";
 import { clamp, mean, zscores } from "../spatial/stats";
 import { buildWeights } from "../spatial/weights";
-import { loadManifest, loadPois, loadStops, loadTracts } from "../data/load";
+import { loadManifest, loadTracts } from "../data/load";
 import { biClass, PRIORITY_CLASS, tertiles } from "./classify";
-import type {
-  AccessDomain,
-  AnalysisParams,
-  AnalysisResult,
-  NeedWeights,
-  TractProps,
-  TractResult,
+import { EMPTY_OVERRIDES } from "./params";
+import { overridesKey, supplyFor } from "./supply";
+import {
+  ACCESS_DOMAINS,
+  type AccessDomain,
+  type AnalysisParams,
+  type AnalysisResult,
+  type NeedWeights,
+  type SupplyOverrides,
+  type TractProps,
+  type TractResult,
 } from "./types";
-
-const ACCESS_DOMAINS: AccessDomain[] = ["grocery", "pharmacy", "clinic", "transit"];
 
 /** Population growth 2019→2024, clipped so a handful of new-build tracts don't dominate. */
 export function popGrowth(p: TractProps): number | null {
@@ -33,7 +35,7 @@ export function popGrowth(p: TractProps): number | null {
  * Standardize a component, treating nulls as "average" (z = 0) so a tract
  * missing one input is neither rewarded nor punished for it.
  */
-function zWithNulls(values: Array<number | null>): number[] {
+export function zWithNulls(values: Array<number | null>): number[] {
   const present = values.filter((v): v is number => v != null);
   if (present.length === 0) return values.map(() => 0);
   const z = zscores(present);
@@ -58,16 +60,19 @@ function weightedComposite(
   return out;
 }
 
-function supplyFor(domain: AccessDomain): Supply[] {
-  if (domain === "transit") {
-    return loadStops().map((s) => ({ lon: s.lon, lat: s.lat, capacity: s.tph }));
-  }
-  return loadPois()
-    .filter((p) => p.category === domain)
-    .map((p) => ({ lon: p.lon, lat: p.lat, capacity: 1 }));
+/** Tract centroids as demand points, in tract order. */
+export function demandPoints(): Demand[] {
+  return loadTracts().features.map((f) => ({
+    lon: f.properties.cx,
+    lat: f.properties.cy,
+    population: f.properties.pop,
+  }));
 }
 
-export function runAnalysis(params: AnalysisParams): AnalysisResult {
+export function runAnalysis(
+  params: AnalysisParams,
+  overrides: SupplyOverrides = EMPTY_OVERRIDES
+): AnalysisResult {
   const features = loadTracts().features;
   const props = features.map((f) => f.properties);
   const n = props.length;
@@ -84,15 +89,11 @@ export function runAnalysis(params: AnalysisParams): AnalysisResult {
   const need = weightedComposite(needBy, params.weights, n);
 
   // ---- Access -----------------------------------------------------------
-  const demand: Demand[] = props.map((p) => ({
-    lon: p.cx,
-    lat: p.cy,
-    population: p.pop,
-  }));
+  const demand = demandPoints();
   const accessRaw = {} as Record<AccessDomain, number[]>;
   const accessZ = {} as Record<AccessDomain, number[]>;
   for (const domain of ACCESS_DOMAINS) {
-    const raw = twoStepFca(demand, supplyFor(domain), {
+    const raw = twoStepFca(demand, supplyFor(domain, overrides), {
       radiusKm: params.radiusKm,
       decay: params.decay,
     }).map((a) => a * 1000);
@@ -124,6 +125,9 @@ export function runAnalysis(params: AnalysisParams): AnalysisResult {
     gap: round(gap[i]),
     accessBy: Object.fromEntries(
       ACCESS_DOMAINS.map((d) => [d, round(accessRaw[d][i])])
+    ) as Record<AccessDomain, number>,
+    accessZ: Object.fromEntries(
+      ACCESS_DOMAINS.map((d) => [d, round(accessZ[d][i])])
     ) as Record<AccessDomain, number>,
     needBy: Object.fromEntries(
       (Object.keys(needBy) as Array<keyof NeedWeights>).map((k) => [
@@ -161,6 +165,7 @@ export function runAnalysis(params: AnalysisParams): AnalysisResult {
   const manifest = loadManifest();
   return {
     params,
+    overrides,
     tracts,
     global: { I: round(global.I), z: round(global.z), p: round(global.p) },
     summary: {
@@ -186,24 +191,27 @@ export function runAnalysis(params: AnalysisParams): AnalysisResult {
   };
 }
 
-function round(x: number, digits = 4): number {
+export function round(x: number, digits = 4): number {
   const f = 10 ** digits;
   return Math.round(x * f) / f;
 }
 
 // ---- Memoization ----------------------------------------------------------
-// Results are pure functions of params, so identical requests (the common
-// case: the map's defaults) reuse the last computation. Bounded so a
-// parameter sweep can't grow memory without limit.
+// Results are pure functions of params and overrides, so identical requests
+// (the common case: the map's defaults) reuse the last computation. Bounded
+// so a parameter sweep can't grow memory without limit.
 
 const MAX_CACHED = 16;
 const cache = new Map<string, AnalysisResult>();
 
-export function runAnalysisCached(params: AnalysisParams): AnalysisResult {
-  const key = JSON.stringify(params);
+export function runAnalysisCached(
+  params: AnalysisParams,
+  overrides: SupplyOverrides = EMPTY_OVERRIDES
+): AnalysisResult {
+  const key = JSON.stringify(params) + overridesKey(overrides);
   const hit = cache.get(key);
   if (hit) return hit;
-  const result = runAnalysis(params);
+  const result = runAnalysis(params, overrides);
   if (cache.size >= MAX_CACHED) {
     const oldest = cache.keys().next().value;
     if (oldest !== undefined) cache.delete(oldest);

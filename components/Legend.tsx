@@ -19,7 +19,7 @@ export function Legend({ mode, showPriority }: { mode: Mode; showPriority: boole
           <span>no prior-vintage match</span>
         </div>
       )}
-      {showPriority && (
+      {showPriority && mode !== "coverage" && (
         <div className={styles.row}>
           <span className={`${styles.swatch} ${styles.outline}`} />
           <span>priority cell: top-third need, bottom-third access</span>

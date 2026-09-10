@@ -53,6 +53,24 @@ export interface Stop {
 }
 
 export type AccessDomain = PoiCategory | "transit";
+export const ACCESS_DOMAINS: AccessDomain[] = ["grocery", "pharmacy", "clinic", "transit"];
+
+/** A hypothetical facility or stop for what-if scenarios and site selection. */
+export interface FacilitySpec {
+  domain: AccessDomain;
+  lon: number;
+  lat: number;
+  /** Service capacity; defaults to 1 for a POI and 6 trips/hour for a stop. */
+  capacity?: number;
+  label?: string;
+}
+
+/** Changes to the supply side applied before an analysis run. */
+export interface SupplyOverrides {
+  add: FacilitySpec[];
+  /** Ids of existing POIs or stops to remove. */
+  remove: string[];
+}
 
 export interface NeedWeights {
   poverty: number;
@@ -79,6 +97,8 @@ export interface TractResult {
   gap: number;
   /** Raw 2SFCA accessibility per 1,000 residents, by domain. */
   accessBy: Record<AccessDomain, number>;
+  /** Standardized (log1p, z-scored) accessibility by domain. */
+  accessZ: Record<AccessDomain, number>;
   /** Standardized need components that fed the composite. */
   needBy: Record<keyof NeedWeights, number>;
   popGrowth: number | null;
@@ -107,6 +127,7 @@ export interface AnalysisSummary {
 
 export interface AnalysisResult {
   params: AnalysisParams;
+  overrides: SupplyOverrides;
   tracts: TractResult[];
   global: { I: number; z: number; p: number };
   summary: AnalysisSummary;

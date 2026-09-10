@@ -42,6 +42,10 @@
   margin: 6px 0 8px;
 }
 
+.muted {
+  color: var(--muted);
+}
+
 .segmented {
   display: flex;
   border: 1px solid var(--border);
@@ -50,19 +54,29 @@
   margin-bottom: 8px;
 }
 
+.segmented.wrap {
+  flex-wrap: wrap;
+}
+
 .segmented button {
-  flex: 1;
-  padding: 7px 4px;
+  flex: 1 1 auto;
+  padding: 7px 6px;
   border: 0;
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .segmented button + button {
   border-left: 1px solid var(--border);
+}
+
+.segmented.wrap button {
+  border-left: 0;
+  box-shadow: inset 1px 0 0 var(--border), inset 0 1px 0 var(--border);
 }
 
 .segmented button:hover {
@@ -130,12 +144,21 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--page);
+  min-width: 0;
 }
 
 .tileValue {
   font-size: 20px;
   font-weight: 650;
   letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tileValue .muted {
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .tileLabel {
@@ -199,13 +222,15 @@
   margin: 0;
 }
 
-.detailHead button {
+.detailHead button,
+.iconButton {
   border: 0;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1;
   cursor: pointer;
+  padding: 0 4px;
 }
 
 .facts {
@@ -226,6 +251,173 @@
 
 .factRow {
   display: contents;
+}
+
+.search {
+  display: flex;
+  gap: 6px;
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--page);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+}
+
+.search input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.button {
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--page);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.buttonRow {
+  display: flex;
+  gap: 6px;
+}
+
+.linkButton {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.linkButton:hover {
+  text-decoration: underline;
+}
+
+.matches {
+  list-style: none;
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.subpanel {
+  margin-bottom: 10px;
+}
+
+.holes {
+  list-style: none;
+  margin: 6px 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.holes strong {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  margin-right: 2px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--page);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  background: var(--hover);
+}
+
+.chipActive {
+  border-color: var(--chip);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--chip) 35%, transparent);
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--chip);
+  flex: none;
+}
+
+.suggest {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.suggest select {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--page);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
+.facilities {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.facilities li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.facilityLabel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .footer {

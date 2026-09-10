@@ -1,7 +1,12 @@
 import { z } from "zod";
-import { analysisParamsSchema, toParams } from "../analysis/params";
+import { analysisParamsSchema, EMPTY_OVERRIDES, overridesSchema, toParams } from "../analysis/params";
 import { runAnalysisCached } from "../analysis/run";
-import type { AnalysisParams, AnalysisResult, TractResult } from "../analysis/types";
+import type {
+  AnalysisParams,
+  AnalysisResult,
+  SupplyOverrides,
+  TractResult,
+} from "../analysis/types";
 import { loadTracts } from "../data/load";
 
 /**
@@ -18,6 +23,14 @@ export const toolParamsShape = {
   wGrowth: analysisParamsSchema.shape.wGrowth.optional(),
 };
 
+/** Scenario overrides, for tools that accept hypothetical supply. */
+export const scenarioShape = {
+  add: overridesSchema.shape.add.optional().describe(
+    "Hypothetical facilities or stops to add before computing."
+  ),
+  remove: overridesSchema.shape.remove.optional(),
+};
+
 export type ToolParams = {
   radiusKm?: number;
   decay?: "binary" | "gaussian";
@@ -28,6 +41,11 @@ export type ToolParams = {
   wGrowth?: number;
 };
 
+export type ScenarioArgs = {
+  add?: SupplyOverrides["add"];
+  remove?: string[];
+};
+
 export function resolveParams(args: ToolParams): AnalysisParams {
   const defined = Object.fromEntries(
     Object.entries(args).filter(([, v]) => v !== undefined)
@@ -35,8 +53,13 @@ export function resolveParams(args: ToolParams): AnalysisParams {
   return toParams(analysisParamsSchema.parse(defined));
 }
 
-export function analyze(args: ToolParams): AnalysisResult {
-  return runAnalysisCached(resolveParams(args));
+export function resolveOverrides(args: ScenarioArgs): SupplyOverrides {
+  if (!args.add?.length && !args.remove?.length) return EMPTY_OVERRIDES;
+  return { add: args.add ?? [], remove: args.remove ?? [] };
+}
+
+export function analyze(args: ToolParams, scenario: ScenarioArgs = {}): AnalysisResult {
+  return runAnalysisCached(resolveParams(args), resolveOverrides(scenario));
 }
 
 export const readOnly = {
@@ -63,6 +86,13 @@ export function describeParams(p: AnalysisParams): string {
   );
 }
 
+export function describeScenario(o: SupplyOverrides): string {
+  if (o.add.length === 0 && o.remove.length === 0) return "";
+  const adds = o.add.map((f) => `+${f.domain}${f.label ? ` "${f.label}"` : ""} at ${f.lat.toFixed(4)}, ${f.lon.toFixed(4)}`);
+  const removes = o.remove.map((id) => `-${id}`);
+  return ` Scenario: ${[...adds, ...removes].join("; ")}.`;
+}
+
 export function tractLabel(geoid: string): string {
   const f = loadTracts().features.find((t) => t.properties.geoid === geoid);
   return f ? `${f.properties.name}, ${f.properties.county} (${geoid})` : geoid;
@@ -74,6 +104,10 @@ export function fmtPct(x: number | null): string {
 
 export function fmtMoney(x: number | null): string {
   return x == null ? "n/a" : `$${Math.round(x).toLocaleString("en-US")}`;
+}
+
+export function fmtInt(x: number): string {
+  return Math.round(x).toLocaleString("en-US");
 }
 
 export function clusterWord(t: TractResult): string {
@@ -90,6 +124,11 @@ export function clusterWord(t: TractResult): string {
       return "no significant cluster";
   }
 }
+
+export const geoidSchema = z
+  .string()
+  .regex(/^13(121|089|063)\d{6}$/)
+  .describe("11-digit tract GEOID in Fulton, DeKalb or Clayton.");
 
 /** Zod is re-exported so tool files import one thing for schemas. */
 export { z };
