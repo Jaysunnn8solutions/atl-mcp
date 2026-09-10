@@ -157,7 +157,6 @@ export default function GapMap({
       minZoom={9}
       maxZoom={16}
       className={styles.map}
-      preferCanvas
     >
       <TileLayer key={dark ? "dark" : "light"} url={dark ? TILES.dark : TILES.light} attribution={ATTRIBUTION} />
       <GeoJSON key={layerKey} data={tracts} style={style} onEachFeature={onEachFeature} />
