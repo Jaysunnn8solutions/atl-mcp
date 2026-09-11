@@ -22,15 +22,18 @@ export function describeAnalysisHandler() {
 
   return text(
     [
-      `# Metro Atlanta resource gap screen`,
+      `# Atlanta essential access`,
       ``,
-      `Study area: ${m.counties.map((c) => c.name).join(", ")} counties, Georgia ` +
+      `Where lower-income neighbourhoods lack groceries, pharmacies, clinics and transit, and where money would change that. ` +
+        `Study area: ${m.counties.map((c) => c.name).join(", ")} counties, Georgia ` +
         `(${m.counts.tracts} census tracts, ${m.boundaryVintage} boundaries).`,
       ``,
       `## What is measured`,
       `- **Need** per tract: a weighted composite of poverty rate, households with ` +
-        `no vehicle, share aged 65+, share under 18, and population growth ` +
-        `${m.acsPriorVintage}→${m.acsVintage}. Each component is standardized (z-score).`,
+        `no vehicle, share aged 65+, share under 18, population growth ` +
+        `${m.acsPriorVintage}→${m.acsVintage}, and low median income. Each component is standardized (z-score).`,
+      `- **Budget planning**: plan_budget takes dollars and a cost per facility type and buys the mix that gives the most ` +
+        `lower-income residents (tracts under an income cap, default $65k) an essential service within reach.`,
       `- **Access** per tract: two-step floating catchment area (2SFCA) accessibility to ` +
         `groceries, pharmacies, clinics, and scheduled transit service, averaged after ` +
         `standardizing. Transit supply is weighted by weekday trips per hour at each stop.`,

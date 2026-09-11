@@ -5,13 +5,15 @@
 
 import { loadManifest } from "../data/load";
 
-export const METHOD_MARKDOWN = `# Atlanta resource gap screen — method
+export const METHOD_MARKDOWN = `# Atlanta essential access — method
 
-**Question.** Where does need outrun access to groceries, pharmacies, clinics and transit, and does that pattern cluster?
+**Question.** Where do lower-income neighbourhoods lack groceries, pharmacies, clinics and transit, does that pattern cluster, and where would a budget change it?
 
 **Units.** 2020 census tracts in Fulton, DeKalb and Clayton counties. Tract centroids stand in for residents.
 
-**Need** = weighted mean of five standardized (z-score) components: poverty rate, households with no vehicle, share aged 65+, share under 18, and population growth from the prior ACS vintage (apportioned from 2010 tracts to 2020 tracts by land area). Nulls contribute 0.
+**Need** = weighted mean of six standardized (z-score) components: poverty rate, households with no vehicle, share aged 65+, share under 18, population growth from the prior ACS vintage (apportioned from 2010 tracts to 2020 tracts by land area), and low median household income (negative log income). Nulls contribute 0.
+
+**Budget planning** is a budgeted multi-type maximal covering problem: each step buys the facility (any type, at that type's cost) with the highest newly covered focus-group weight per dollar that still fits the budget, then a swap pass tries to improve each purchase within its type. The focus group is residents of tracts at or below an income cap. Costs are user inputs.
 
 **Access** = mean of four standardized domains. Each domain is two-step floating catchment area (2SFCA) accessibility: every supply point divides its capacity by the population inside its catchment; every tract sums the ratios of supply points that reach it. Catchments default to 1.6 km with Gaussian decay. Transit supply capacity is weekday trips per hour at the stop. Raw values are log1p-transformed before standardizing.
 

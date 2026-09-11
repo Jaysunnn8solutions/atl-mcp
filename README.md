@@ -1,6 +1,6 @@
 # atl-mcp
 
-A resource-gap screen for metro Atlanta: which census tracts have **high or rising need** and **low access** to groceries, pharmacies, clinics, and MARTA service, where the holes in coverage are, and where new sites would do the most good. An interactive map, a JSON API, and an [MCP](https://modelcontextprotocol.io) server, all computed from the same engine over the same committed data.
+**Atlanta essential access.** Where lower-income neighbourhoods lack groceries, pharmacies, clinics, and MARTA service, where the holes in coverage are, and where a budget would change that. An interactive map, a JSON API, and an [MCP](https://modelcontextprotocol.io) server, all computed from the same engine over the same committed data.
 
 **Live map:** `https://atl-mcp.vercel.app`
 **MCP endpoint:** `https://atl-mcp.vercel.app/mcp`
@@ -19,13 +19,15 @@ Every tract gets three numbers and two labels:
 
 | Output | Meaning |
 |---|---|
-| **Need** | Composite of poverty rate, households with no vehicle, share aged 65+, share under 18, and population growth 2019→2024. Each component is standardized; weights are adjustable. |
+| **Need** | Composite of poverty rate, households with no vehicle, share aged 65+, share under 18, population growth 2019→2024, and low median income. Each component is standardized; weights are adjustable. |
 | **Access** | Two-step floating catchment area (2SFCA) accessibility to groceries, pharmacies, clinics, and scheduled transit, averaged after standardizing. Transit supply is weighted by weekday trips per hour. |
 | **Gap** | Need minus access, in z-score units. |
 | **Class** | Tertile of need × tertile of access. `N3A1` (top-third need, bottom-third access) is the priority cell. |
 | **Cluster** | Local Moran's I on the gap: high-gap cluster, low-gap cluster, outlier, or not significant. |
 
-On top of that: **coverage** (who is outside every catchment, grouped into contiguous holes), **site selection** (the k new sites that cover the most uncovered need), **what-if scenarios** (drop a facility, see the access index recompute), **similarity** (tracts that look alike, or look alike but do better), and **visit routing**.
+On top of that: **coverage** (who is outside every catchment, grouped into contiguous holes), **site selection** (the k new sites that cover the most uncovered need), **budget planning** (give it dollars and a cost per facility type; it buys the mix that gives the most lower-income residents a service they lack), **what-if scenarios** (drop a facility, see the access index recompute), **similarity** (tracts that look alike, or look alike but do better), and **visit routing**.
+
+Every number on the page is also said in words: a tract card leads with where it is, a Priority / Watch / Not flagged verdict, ranks like "worse access than 88% of tracts", and counts of what is actually within reach. Scenario results are reported as residents gaining access and coverage shares, not just index movements.
 
 It is a screening tool. It surfaces candidates for closer study; it does not establish that a tract needs a particular intervention.
 
@@ -36,6 +38,7 @@ It is a screening tool. It surfaces candidates for closer study; it does not est
 - Seven layers: gap, need, access, growth, clusters, coverage, and (with a scenario) change in access.
 - Place search for neighbourhoods, addresses, landmarks and stations.
 - Scenario mode: pick a supply type and click the map to place a hypothetical facility, or ask the solver to suggest sites. Every layer and the summary recompute against the scenario.
+- Budget mode: enter a budget and a cost per facility type, choose who counts (an income cap), and the planner buys the best mix and drops it into the scenario, reporting residents gaining access and coverage before and after.
 - Coverage mode: choose a supply type (and a minimum service frequency for transit), see the holes ranked by population, click one to fly to it.
 - Adjustable catchment radius, distance decay, and need weights.
 - The URL hash carries the whole view, so any state can be shared as a link. "Copy settings for Claude" puts the radius, weights and scenario on the clipboard as the exact arguments the MCP tools take, and `load_view` reads a pasted link on the server side, so a conversation can pick up exactly where the map left off. CSV and GeoJSON export of the current results.
@@ -68,6 +71,7 @@ Then ask something like *"Where are the biggest gaps in clinic coverage, and whe
 | `find_similar` | Nearest neighbours in feature space. Exclude bordering tracts to find peers; require an access advantage to find benchmarks. |
 | `coverage_gaps` | Population outside every catchment for one supply type, as ranked contiguous holes. |
 | `site_selection` | Maximal covering location problem: the k sites that cover the most uncovered (need-weighted) population. |
+| `plan_budget` | Budgeted multi-type covering: dollars plus a cost per type in, the purchases that give the most lower-income residents an essential service out. Costs are mock defaults, overridable. |
 | `what_if` | Recompute everything with facilities added or removed; report what changed. |
 | `plan_visit` | Shortest visiting order over a set of tracts from a station or point. |
 
@@ -75,7 +79,7 @@ Every analysis tool accepts the same optional parameters as the map (catchment r
 
 ### Prompts and resources
 
-Three prompts package multi-tool workflows: `brief_tract` (a one-page brief on a tract), `county_comparison`, and `site_plan` (holes → sites → what-if). Two resources expose the data manifest (`atl://data/manifest`) and the method (`atl://method`) for context.
+Three prompts package multi-tool workflows: `brief_tract` (a one-page brief on a tract), `county_comparison`, and `site_plan` (holes → sites → what-if). Ask "I have $100M for essential access in lower-income neighbourhoods, where should it go?" and a model with the server attached will call `plan_budget`, then `what_if` to verify. Two resources expose the data manifest (`atl://data/manifest`) and the method (`atl://method`) for context.
 
 ---
 
@@ -90,6 +94,8 @@ Three prompts package multi-tool workflows: `brief_tract` (a one-page brief on a
 **Coverage.** Binary: a tract is covered if any supply point lies within the radius of its centroid. Uncovered tracts are grouped into connected components of the contiguity graph and ranked by population, so the answer is "the three biggest holes", not a list of 300 tracts.
 
 **Site selection.** The maximal covering location problem: choose k sites from tract centroids to maximize newly covered weight, where weight is population or population scaled by the need index. Greedy construction, then swap-based local search. The test suite includes the classic instance where greedy alone picks a site that blocks the optimal pair and the swap pass recovers it.
+
+**Budget planning.** A budgeted, multi-type version of the same covering problem. Each step buys the facility, of any allowed type at that type's cost, with the highest newly covered focus-group weight per dollar that still fits, then a swap pass tries to improve each purchase within its type. The focus group is residents of tracts at or below an income cap (default $65,000, about the bottom third of residents). Default costs are placeholders: $12M for a grocery store, $6M for a clinic, $2.5M for a pharmacy, $2M for a frequent-service transit stop. They exist to be replaced with real figures.
 
 **Similarity.** Euclidean distance over eleven standardized features: the five need components, four access domains, log income and log rent. Each match reports its three largest feature differences so the model can say *why* two tracts are alike.
 

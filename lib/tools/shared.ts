@@ -21,6 +21,7 @@ export const toolParamsShape = {
   wSeniors: analysisParamsSchema.shape.wSeniors.optional(),
   wChildren: analysisParamsSchema.shape.wChildren.optional(),
   wGrowth: analysisParamsSchema.shape.wGrowth.optional(),
+  wIncome: analysisParamsSchema.shape.wIncome.optional(),
 };
 
 /** Scenario overrides, for tools that accept hypothetical supply. */
@@ -39,6 +40,7 @@ export type ToolParams = {
   wSeniors?: number;
   wChildren?: number;
   wGrowth?: number;
+  wIncome?: number;
 };
 
 export type ScenarioArgs = {
@@ -91,7 +93,7 @@ export function describeParams(p: AnalysisParams): string {
   return (
     `radius ${p.radiusKm} km, ${p.decay} decay; need weights: ` +
     `poverty ${w.poverty}, no-vehicle ${w.noVehicle}, seniors ${w.seniors}, ` +
-    `children ${w.children}, growth ${w.growth}`
+    `children ${w.children}, growth ${w.growth}, low income ${w.income}`
   );
 }
 

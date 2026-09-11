@@ -104,6 +104,9 @@ export function runAnalysis(
     seniors: zWithNulls(props.map((p) => p.seniorShare)),
     children: zWithNulls(props.map((p) => p.childShare)),
     growth: zWithNulls(growth),
+    // Lower income is higher need, so the sign is flipped; log keeps a few
+    // very high-income tracts from dominating the scale.
+    income: zWithNulls(props.map((p) => (p.medianIncome == null ? null : -Math.log(p.medianIncome)))),
   };
   const need = weightedComposite(needBy, params.weights, n);
 

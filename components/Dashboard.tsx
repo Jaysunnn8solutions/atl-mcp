@@ -14,7 +14,8 @@ import type { SiteSelectionResult } from "@/lib/analysis/site-selection";
 import type { TractCollection } from "@/lib/data/load";
 import type { GeoMatch } from "@/lib/geocode";
 import GapMap, { type MapPoint, type Overlays } from "./GapMap";
-import { Sidebar, type Params } from "./Sidebar";
+import { Sidebar, type BudgetRequest, type Params } from "./Sidebar";
+import type { BudgetResult } from "@/lib/analysis/budget-types";
 import { download, toCsv, toGeoJson } from "./exportData";
 import type { Mode } from "./scales";
 import { DOMAIN_LABELS } from "./scales";
@@ -34,6 +35,7 @@ function queryFor(p: Params): string {
   q.set("wSeniors", String(p.wSeniors));
   q.set("wChildren", String(p.wChildren));
   q.set("wGrowth", String(p.wGrowth));
+  q.set("wIncome", String(p.wIncome));
   return q.toString();
 }
 
@@ -46,6 +48,7 @@ function bodyFor(p: Params, scenario: FacilitySpec[], extra: Record<string, unkn
     wSeniors: p.wSeniors,
     wChildren: p.wChildren,
     wGrowth: p.wGrowth,
+    wIncome: p.wIncome,
     add: scenario,
     remove: [],
     ...extra,
@@ -121,6 +124,8 @@ export function Dashboard() {
   const [version, setVersion] = useState(0);
   const [loading, setLoading] = useState(true);
   const [suggesting, setSuggesting] = useState(false);
+  const [planning, setPlanning] = useState(false);
+  const [budgetResult, setBudgetResult] = useState<BudgetResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const scenarioActive = scenario.length > 0;
@@ -342,6 +347,40 @@ export function Dashboard() {
     },
     [params, scenario, updateScenario]
   );
+  const onPlanBudget = useCallback(
+    async (opts: BudgetRequest) => {
+      setPlanning(true);
+      try {
+        const r = await getJson<BudgetResult>("/api/budget", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          // A bought "transit stop" means frequent service, so only count
+          // existing stops with at least 4 trips an hour as coverage.
+          body: bodyFor(params, scenario, { ...opts, weighting: "need", minTph: 4 }),
+        });
+        setBudgetResult(r);
+        if (r.picks.length === 0) {
+          setError("Nothing affordable adds coverage. Raise the budget or lower the costs.");
+          return;
+        }
+        updateScenario((s) => [
+          ...s,
+          ...r.picks.map((k) => ({
+            domain: k.domain,
+            lon: k.lon,
+            lat: k.lat,
+            label: `Budget: ${DOMAIN_LABELS[k.domain].toLowerCase()} near ${k.name}`,
+          })),
+        ]);
+        setError(null);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setPlanning(false);
+      }
+    },
+    [params, scenario, updateScenario]
+  );
   const onCopy = useCallback(
     async (kind: "link" | "settings") => {
       const view = { mode, params, showPriority, overlays, selected, scenario, coverageDomain, minTph };
@@ -401,6 +440,9 @@ export function Dashboard() {
         }}
         onSuggestSites={onSuggestSites}
         suggesting={suggesting}
+        onPlanBudget={onPlanBudget}
+        budgetResult={budgetResult}
+        planning={planning}
         onExport={onExport}
         onCopy={onCopy}
       />

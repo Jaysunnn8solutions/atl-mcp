@@ -16,6 +16,7 @@ export interface Params {
   wSeniors: number;
   wChildren: number;
   wGrowth: number;
+  wIncome: number;
 }
 
 export interface Overlays {
@@ -44,6 +45,7 @@ export const DEFAULT_PARAMS: Params = {
   wSeniors: 0.5,
   wChildren: 0.5,
   wGrowth: 1,
+  wIncome: 1,
 };
 
 export const DEFAULT_VIEW: ViewState = {
@@ -59,6 +61,7 @@ export const DEFAULT_VIEW: ViewState = {
 
 const MODES = new Set<Mode>(["gap", "need", "access", "growth", "clusters", "coverage", "delta"]);
 const DOMAINS = new Set<AccessDomain>(["grocery", "pharmacy", "clinic", "transit"]);
+const WEIGHT_KEYS = ["wPoverty", "wNoVehicle", "wSeniors", "wChildren", "wGrowth", "wIncome"] as const;
 
 function num(s: string | null, fallback: number, lo: number, hi: number): number {
   const n = Number(s);
@@ -69,8 +72,14 @@ function num(s: string | null, fallback: number, lo: number, hi: number): number
 export function parseViewHash(hash: string): ViewState {
   const h = new URLSearchParams(hash.replace(/^#/, ""));
   const modeRaw = h.get("mode") as Mode | null;
+  // Weights: five values from older links, six with low income.
   const w = (h.get("w") ?? "").split(",").map(Number);
-  const wOk = w.length === 5 && w.every((x) => Number.isFinite(x) && x >= 0 && x <= 5);
+  const wOk = (w.length === 5 || w.length === 6) && w.every((x) => Number.isFinite(x) && x >= 0 && x <= 5);
+  const params = { ...DEFAULT_PARAMS };
+  if (wOk) WEIGHT_KEYS.forEach((k, i) => (params[k] = w[i] ?? DEFAULT_PARAMS[k]));
+  params.radiusKm = num(h.get("r"), DEFAULT_PARAMS.radiusKm, 0.25, 5);
+  params.decay = h.get("d") === "binary" ? "binary" : "gaussian";
+
   const ov = new Set((h.get("ov") ?? "").split(",").filter(Boolean));
   const scenario: FacilitySpec[] = [];
   for (const item of (h.get("scn") ?? "").split("|").filter(Boolean)) {
@@ -80,15 +89,7 @@ export function parseViewHash(hash: string): ViewState {
   const covRaw = h.get("cov") as AccessDomain | null;
   return {
     mode: modeRaw && MODES.has(modeRaw) ? modeRaw : DEFAULT_VIEW.mode,
-    params: {
-      radiusKm: num(h.get("r"), DEFAULT_PARAMS.radiusKm, 0.25, 5),
-      decay: h.get("d") === "binary" ? "binary" : "gaussian",
-      wPoverty: wOk ? w[0] : DEFAULT_PARAMS.wPoverty,
-      wNoVehicle: wOk ? w[1] : DEFAULT_PARAMS.wNoVehicle,
-      wSeniors: wOk ? w[2] : DEFAULT_PARAMS.wSeniors,
-      wChildren: wOk ? w[3] : DEFAULT_PARAMS.wChildren,
-      wGrowth: wOk ? w[4] : DEFAULT_PARAMS.wGrowth,
-    },
+    params,
     showPriority: h.get("pri") !== "0",
     overlays: h.has("ov")
       ? { rail: ov.has("rail"), grocery: ov.has("grocery"), pharmacy: ov.has("pharmacy"), clinic: ov.has("clinic") }
@@ -107,9 +108,8 @@ export function serializeViewHash(v: ViewState): string {
   const p = v.params;
   if (p.radiusKm !== DEFAULT_PARAMS.radiusKm) h.set("r", String(p.radiusKm));
   if (p.decay !== DEFAULT_PARAMS.decay) h.set("d", p.decay);
-  const w = [p.wPoverty, p.wNoVehicle, p.wSeniors, p.wChildren, p.wGrowth];
-  const dw = [DEFAULT_PARAMS.wPoverty, DEFAULT_PARAMS.wNoVehicle, DEFAULT_PARAMS.wSeniors, DEFAULT_PARAMS.wChildren, DEFAULT_PARAMS.wGrowth];
-  if (w.some((x, i) => x !== dw[i])) h.set("w", w.join(","));
+  const w = WEIGHT_KEYS.map((k) => p[k]);
+  if (WEIGHT_KEYS.some((k) => p[k] !== DEFAULT_PARAMS[k])) h.set("w", w.join(","));
   if (!v.showPriority) h.set("pri", "0");
   const ov = (Object.keys(v.overlays) as Array<keyof Overlays>).filter((k) => v.overlays[k]);
   const dov = (Object.keys(DEFAULT_VIEW.overlays) as Array<keyof Overlays>).filter((k) => DEFAULT_VIEW.overlays[k]);

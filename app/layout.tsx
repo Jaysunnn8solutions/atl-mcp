@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Atlanta resource gap screen",
+  title: "Atlanta essential access",
   description:
-    "Census tracts in Fulton, DeKalb and Clayton counties where need is high or rising and access to groceries, pharmacies, clinics and MARTA service is low.",
+    "Where lower-income neighbourhoods in Fulton, DeKalb and Clayton counties lack groceries, pharmacies, clinics and MARTA service, and where a budget would change that.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

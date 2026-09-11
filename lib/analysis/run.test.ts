@@ -71,6 +71,15 @@ describe("runAnalysis on committed data", () => {
     expect(elapsedMs).toBeLessThan(5000);
   });
 
+  it("treats lower income as higher need", () => {
+    const withIncome = runAnalysis(parseParams({ wIncome: 5, wPoverty: 0, wNoVehicle: 0, wSeniors: 0, wChildren: 0, wGrowth: 0 }));
+    const props = loadTracts().features.map((f) => f.properties);
+    const richest = props.reduce((a, b) => ((b.medianIncome ?? 0) > (a.medianIncome ?? 0) ? b : a));
+    const poorest = props.reduce((a, b) => ((b.medianIncome ?? Infinity) < (a.medianIncome ?? Infinity) ? b : a));
+    const need = new Map(withIncome.tracts.map((t) => [t.geoid, t.need]));
+    expect(need.get(poorest.geoid)!).toBeGreaterThan(need.get(richest.geoid)!);
+  });
+
   it("memoizes identical parameter sets", () => {
     const a = runAnalysisCached(parseParams({ radiusKm: 2 }));
     const b = runAnalysisCached(parseParams({ radiusKm: "2" }));

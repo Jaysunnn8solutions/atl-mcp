@@ -469,6 +469,57 @@
   font-size: 12px;
 }
 
+.field {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.field > span:first-child {
+  color: var(--text-secondary);
+}
+
+.inputUnit {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.inputUnit input {
+  width: 64px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--page);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  text-align: right;
+}
+
+.inputUnit input:disabled {
+  opacity: 0.5;
+}
+
+.costGrid {
+  margin: 4px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.budgetResult {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--page);
+}
+
 .facilities {
   list-style: none;
   display: flex;

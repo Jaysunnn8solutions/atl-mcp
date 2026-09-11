@@ -82,6 +82,8 @@ export interface NeedWeights {
   seniors: number;
   children: number;
   growth: number;
+  /** Lower median household income counts as higher need. */
+  income: number;
 }
 
 export interface AnalysisParams {

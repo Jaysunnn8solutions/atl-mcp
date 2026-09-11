@@ -9,6 +9,7 @@ import type {
   TractResult,
 } from "@/lib/analysis/types";
 import type { CoverageResult } from "@/lib/analysis/coverage";
+import { DEFAULT_COSTS, type BudgetResult, type CostTable } from "@/lib/analysis/budget-types";
 import type { GeoMatch } from "@/lib/geocode";
 import type { Overlays, MapPoint } from "./GapMap";
 import { Legend } from "./Legend";
@@ -54,6 +55,13 @@ export interface WithinReach {
   rail: string[];
 }
 
+export interface BudgetRequest {
+  budget: number;
+  costs: CostTable;
+  incomeCap: number | null;
+  domains: AccessDomain[];
+}
+
 export interface SelectedTract {
   props: TractProps;
   result: TractResult | undefined;
@@ -96,6 +104,10 @@ interface Props {
   onClearScenario: () => void;
   onSuggestSites: (domain: AccessDomain, k: number) => Promise<void>;
   suggesting: boolean;
+  // Budget
+  onPlanBudget: (opts: BudgetRequest) => Promise<void>;
+  budgetResult: BudgetResult | null;
+  planning: boolean;
   // Export and share
   onExport: (kind: "csv" | "geojson") => void;
   /** Returns the text that was (or should be) copied and whether the clipboard accepted it. */
@@ -108,6 +120,7 @@ const WEIGHTS: Array<{ key: keyof Params; label: string; hint: string }> = [
   { key: "wSeniors", label: "Seniors", hint: "share aged 65 and over" },
   { key: "wChildren", label: "Children", hint: "share under 18" },
   { key: "wGrowth", label: "Growth", hint: "population change since 2019" },
+  { key: "wIncome", label: "Low income", hint: "lower median household income counts as more need" },
 ];
 
 export function Sidebar(props: Props) {
@@ -119,10 +132,10 @@ export function Sidebar(props: Props) {
   return (
     <aside className={styles.sidebar}>
       <header className={styles.header}>
-        <h1>Atlanta resource gap screen</h1>
+        <h1>Atlanta essential access</h1>
         <p>
-          Which neighbourhoods need groceries, pharmacies, clinics and transit the most, and how
-          far they are from having them. Fulton, DeKalb and Clayton counties, by census tract.
+          Where lower-income neighbourhoods lack groceries, pharmacies, clinics and transit, and
+          where money would change that. Fulton, DeKalb and Clayton counties, by census tract.
         </p>
       </header>
 
@@ -182,6 +195,8 @@ export function Sidebar(props: Props) {
           loading={loading}
         />
       )}
+
+      <BudgetPanel onPlan={props.onPlanBudget} result={props.budgetResult} planning={props.planning} />
 
       <ScenarioPanel
         scenario={props.scenario}
@@ -475,6 +490,136 @@ function CoverageControls({
         </>
       )}
     </div>
+  );
+}
+
+function moneyM(d: number): string {
+  return `$${(d / 1_000_000).toFixed(d % 1_000_000 ? 1 : 0)}M`;
+}
+
+function BudgetPanel({
+  onPlan,
+  result,
+  planning,
+}: {
+  onPlan: (opts: BudgetRequest) => Promise<void>;
+  result: BudgetResult | null;
+  planning: boolean;
+}) {
+  const [budgetM, setBudgetM] = useState(100);
+  const [costsM, setCostsM] = useState<Record<AccessDomain, number>>({
+    grocery: DEFAULT_COSTS.grocery / 1e6,
+    pharmacy: DEFAULT_COSTS.pharmacy / 1e6,
+    clinic: DEFAULT_COSTS.clinic / 1e6,
+    transit: DEFAULT_COSTS.transit / 1e6,
+  });
+  const [capK, setCapK] = useState(65);
+  const [everyone, setEveryone] = useState(false);
+  const [domains, setDomains] = useState<Record<AccessDomain, boolean>>({
+    grocery: true,
+    pharmacy: true,
+    clinic: true,
+    transit: true,
+  });
+  const chosen = DOMAINS.filter((d) => domains[d]);
+
+  return (
+    <section>
+      <h2>Invest a budget</h2>
+      <p className={styles.blurb}>
+        Give it money and a cost per facility. It buys the mix that gives the most lower-income
+        residents an essential service they lack today, and adds the purchases to the scenario.
+      </p>
+      <label className={styles.field}>
+        <span>Budget</span>
+        <span className={styles.inputUnit}>
+          $<input type="number" min={1} max={5000} step={5} value={budgetM} onChange={(e) => setBudgetM(Number(e.target.value))} />M
+        </span>
+      </label>
+      <div className={styles.costGrid}>
+        {DOMAINS.map((d) => (
+          <label key={d} className={styles.field}>
+            <span>
+              <input type="checkbox" checked={domains[d]} onChange={(e) => setDomains({ ...domains, [d]: e.target.checked })} />{" "}
+              {DOMAIN_LABELS[d]}
+            </span>
+            <span className={styles.inputUnit}>
+              $<input type="number" min={0.1} max={500} step={0.5} value={costsM[d]} onChange={(e) => setCostsM({ ...costsM, [d]: Number(e.target.value) })} />M
+            </span>
+          </label>
+        ))}
+      </div>
+      <label className={styles.field}>
+        <span>Count residents in tracts with median income up to</span>
+        <span className={styles.inputUnit}>
+          $<input type="number" min={10} max={300} step={5} value={capK} disabled={everyone} onChange={(e) => setCapK(Number(e.target.value))} />k
+        </span>
+      </label>
+      <label className={styles.check}>
+        <input type="checkbox" checked={everyone} onChange={(e) => setEveryone(e.target.checked)} />
+        Count everyone instead
+      </label>
+      <button
+        className={styles.button}
+        disabled={planning || chosen.length === 0 || budgetM <= 0}
+        onClick={() =>
+          onPlan({
+            budget: budgetM * 1e6,
+            costs: {
+              grocery: costsM.grocery * 1e6,
+              pharmacy: costsM.pharmacy * 1e6,
+              clinic: costsM.clinic * 1e6,
+              transit: costsM.transit * 1e6,
+            },
+            incomeCap: everyone ? null : capK * 1000,
+            domains: chosen,
+          })
+        }
+      >
+        {planning ? "Planning…" : "Plan the spend"}
+      </button>
+      <p className={styles.blurb}>Costs are placeholders. Change them to whatever your figures are.</p>
+
+      {result && (
+        <div className={styles.budgetResult}>
+          <p className={styles.verdict}>
+            {moneyM(result.spent)} buys {result.picks.length} facilities and gives{" "}
+            {fmtCompact(result.residentsGainedAny)} lower-income residents a service they lacked.
+          </p>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Bought</th>
+                <th>Spent</th>
+                <th>In reach</th>
+              </tr>
+            </thead>
+            <tbody>
+              {DOMAINS.filter((d) => result.options.domains.includes(d)).map((d) => {
+                const s = result.byDomain[d];
+                return (
+                  <tr key={d}>
+                    <td>{DOMAIN_LABELS[d].replace(" stop", "")}</td>
+                    <td>{s.count}</td>
+                    <td>{moneyM(s.spent)}</td>
+                    <td>
+                      {pct(s.coverageBefore)} → <strong>{pct(s.coverageAfter)}</strong>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className={styles.blurb}>
+            &quot;In reach&quot; is the share of the {fmtCompact(result.focusPop)} residents in the
+            focus group with that service within reach.{" "}
+            {result.remaining > 0 ? `${moneyM(result.remaining)} left unspent.` : ""} The purchases
+            are now in the scenario below; switch to the Δ Access layer to see them.
+          </p>
+        </div>
+      )}
+    </section>
   );
 }
 

@@ -38,6 +38,7 @@ async function main() {
       { add: [{ domain: "clinic", lon: -84.45, lat: 33.72, label: "Test clinic" }], limit: 3 },
     ],
     ["plan_visit", { limit: 5, startStation: "Five Points" }],
+    ["plan_budget", { budget: 100_000_000 }],
   ];
 
   let failures = 0;

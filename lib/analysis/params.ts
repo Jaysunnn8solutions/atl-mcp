@@ -32,6 +32,7 @@ export const analysisParamsSchema = z
     wSeniors: z.coerce.number().min(0).max(5).default(0.5),
     wChildren: z.coerce.number().min(0).max(5).default(0.5),
     wGrowth: z.coerce.number().min(0).max(5).default(1),
+    wIncome: z.coerce.number().min(0).max(5).default(1),
   })
   .strict();
 
@@ -82,6 +83,7 @@ export function toParams(q: z.output<typeof analysisParamsSchema>): AnalysisPara
       seniors: q.wSeniors,
       children: q.wChildren,
       growth: q.wGrowth,
+      income: q.wIncome,
     },
   };
 }

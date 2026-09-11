@@ -35,15 +35,14 @@ export const FEATURE_NAMES = [
   "seniors",
   "children",
   "growth",
+  "lowIncome",
   ...ACCESS_DOMAINS.map((d) => `access:${d}`),
-  "income",
   "rent",
 ] as const;
 
 /** One row of standardized features per tract, in tract order. */
 export function featureMatrix(result: AnalysisResult): number[][] {
   const props = loadTracts().features.map((f) => f.properties);
-  const income = zWithNulls(props.map((p) => (p.medianIncome == null ? null : Math.log(p.medianIncome))));
   const rent = zWithNulls(props.map((p) => (p.medianRent == null ? null : Math.log(p.medianRent))));
   return result.tracts.map((t, i) => [
     t.needBy.poverty,
@@ -51,8 +50,8 @@ export function featureMatrix(result: AnalysisResult): number[][] {
     t.needBy.seniors,
     t.needBy.children,
     t.needBy.growth,
+    t.needBy.income,
     ...ACCESS_DOMAINS.map((d) => t.accessZ[d]),
-    income[i],
     rent[i],
   ]);
 }

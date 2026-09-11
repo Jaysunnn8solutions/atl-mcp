@@ -33,6 +33,13 @@ describe("view state hash", () => {
     expect(parseViewHash(hash)).toEqual(view);
   });
 
+  it("accepts five-weight links from before the income component", () => {
+    const v = parseViewHash("w=1.6,1.1,0.8,0.7,0.5");
+    expect(v.params.wPoverty).toBe(1.6);
+    expect(v.params.wGrowth).toBe(0.5);
+    expect(v.params.wIncome).toBe(1);
+  });
+
   it("ignores malformed or out-of-range values", () => {
     const v = parseViewHash("mode=bogus&r=99&w=1,2&sel=abc&scn=grocery@nope");
     expect(v.mode).toBe("gap");
@@ -59,6 +66,7 @@ describe("view state hash", () => {
       wSeniors: 0.5,
       wChildren: 0.5,
       wGrowth: 1,
+      wIncome: 1,
       add: [{ domain: "clinic", lon: -84.45, lat: 33.72 }],
     });
   });
