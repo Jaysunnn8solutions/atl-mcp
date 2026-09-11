@@ -139,7 +139,7 @@ The pipeline output is committed under `data/` (about 1.3 MB) so the deployed ap
 
 **Explain the statistic, not just the label.** Tool responses say "high-gap cluster (local I 1.84, p 0.005)" rather than "HH," similarity results name the features that differ, and site selection reports who each site newly covers.
 
-**Bounded inputs.** Scenario coordinates must fall inside the study area's bounding box, scenarios are capped at 50 facilities, and geocoding is proxied through the server with an identifying user agent and a per-process cache, as both geocoders' usage policies ask.
+**Bounded inputs.** Scenario coordinates must fall inside the study area's bounding box, scenarios are capped at 200 facilities, and geocoding is proxied through the server with an identifying user agent and a per-process cache, as both geocoders' usage policies ask.
 
 **Secrets stay out of logs.** The Census key rides in a query string because that is how the Census API authenticates. The pipeline redacts it from every log line and error message.
 

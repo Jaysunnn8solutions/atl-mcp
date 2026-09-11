@@ -61,7 +61,7 @@ export const facilitySchema = z
 
 export const overridesSchema = z
   .object({
-    add: z.array(facilitySchema).max(50).default([]),
+    add: z.array(facilitySchema).max(200).default([]),
     remove: z
       .array(z.string().max(40))
       .max(200)

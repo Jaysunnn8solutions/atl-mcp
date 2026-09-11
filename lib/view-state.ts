@@ -95,7 +95,7 @@ export function parseViewHash(hash: string): ViewState {
       ? { rail: ov.has("rail"), grocery: ov.has("grocery"), pharmacy: ov.has("pharmacy"), clinic: ov.has("clinic") }
       : DEFAULT_VIEW.overlays,
     selected: /^13\d{9}$/.test(h.get("sel") ?? "") ? h.get("sel") : null,
-    scenario: scenario.slice(0, 50),
+    scenario: scenario.slice(0, 200),
     coverageDomain: covRaw && DOMAINS.has(covRaw) ? covRaw : DEFAULT_VIEW.coverageDomain,
     minTph: num(h.get("tph"), DEFAULT_VIEW.minTph, 0, 60),
   };
