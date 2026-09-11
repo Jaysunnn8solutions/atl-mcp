@@ -38,7 +38,7 @@ It is a screening tool. It surfaces candidates for closer study; it does not est
 - Scenario mode: pick a supply type and click the map to place a hypothetical facility, or ask the solver to suggest sites. Every layer and the summary recompute against the scenario.
 - Coverage mode: choose a supply type (and a minimum service frequency for transit), see the holes ranked by population, click one to fly to it.
 - Adjustable catchment radius, distance decay, and need weights.
-- The URL hash carries the whole view, so any state can be shared as a link. CSV and GeoJSON export of the current results.
+- The URL hash carries the whole view, so any state can be shared as a link. "Copy settings for Claude" puts the radius, weights and scenario on the clipboard as the exact arguments the MCP tools take, and `load_view` reads a pasted link on the server side, so a conversation can pick up exactly where the map left off. CSV and GeoJSON export of the current results.
 
 ---
 
@@ -59,6 +59,7 @@ Then ask something like *"Where are the biggest gaps in clinic coverage, and whe
 | Tool | Purpose |
 |---|---|
 | `describe_analysis` | Method, data vintages, and headline counts. Call first. |
+| `load_view` | Read a link copied from the map (or its "Copy settings" block) and return the parameters, scenario and selected tract as tool arguments. |
 | `find_priority_tracts` | Rank tracts by gap; filter by county or the priority cell. |
 | `get_tract` | Full profile for one GEOID: both vintages, growth, scores with components, what is within the catchment. |
 | `tracts_near` | Tracts around a MARTA rail station or a lon/lat point. |

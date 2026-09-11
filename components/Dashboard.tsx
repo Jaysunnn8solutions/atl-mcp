@@ -18,7 +18,8 @@ import { Sidebar, type Params } from "./Sidebar";
 import { download, toCsv, toGeoJson } from "./exportData";
 import type { Mode } from "./scales";
 import { DOMAIN_LABELS } from "./scales";
-import { readHash, writeHash } from "./urlState";
+import { currentLink, readHash, writeHash } from "./urlState";
+import { viewToClipboardText } from "@/lib/view-state";
 import styles from "./Dashboard.module.css";
 
 function queryFor(p: Params): string {
@@ -304,6 +305,20 @@ export function Dashboard() {
     },
     [params, scenario, updateScenario]
   );
+  const onCopy = useCallback(
+    async (kind: "link" | "settings") => {
+      const view = { mode, params, showPriority, overlays, selected, scenario, coverageDomain, minTph };
+      const link = currentLink(view);
+      const text = kind === "link" ? link : viewToClipboardText(view, link);
+      try {
+        await navigator.clipboard.writeText(text);
+        return { text, copied: true };
+      } catch {
+        return { text, copied: false };
+      }
+    },
+    [mode, params, showPriority, overlays, selected, scenario, coverageDomain, minTph]
+  );
   const onExport = useCallback(
     (kind: "csv" | "geojson") => {
       if (!tracts || results.size === 0) return;
@@ -348,6 +363,7 @@ export function Dashboard() {
         onSuggestSites={onSuggestSites}
         suggesting={suggesting}
         onExport={onExport}
+        onCopy={onCopy}
       />
       <main className={styles.mapPane}>
         {error && (

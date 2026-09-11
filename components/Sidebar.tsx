@@ -25,15 +25,8 @@ import {
 } from "./scales";
 import styles from "./Sidebar.module.css";
 
-export interface Params {
-  radiusKm: number;
-  decay: "binary" | "gaussian";
-  wPoverty: number;
-  wNoVehicle: number;
-  wSeniors: number;
-  wChildren: number;
-  wGrowth: number;
-}
+import type { Params } from "@/lib/view-state";
+export type { Params };
 
 const DOMAINS: AccessDomain[] = ["grocery", "pharmacy", "clinic", "transit"];
 
@@ -68,8 +61,10 @@ interface Props {
   onClearScenario: () => void;
   onSuggestSites: (domain: AccessDomain, k: number) => Promise<void>;
   suggesting: boolean;
-  // Export
+  // Export and share
   onExport: (kind: "csv" | "geojson") => void;
+  /** Returns the text that was (or should be) copied and whether the clipboard accepted it. */
+  onCopy: (kind: "link" | "settings") => Promise<{ text: string; copied: boolean }>;
 }
 
 const WEIGHTS: Array<{ key: keyof Params; label: string }> = [
@@ -236,21 +231,7 @@ export function Sidebar(props: Props) {
         ))}
       </section>
 
-      <section>
-        <h2>Export</h2>
-        <div className={styles.buttonRow}>
-          <button className={styles.button} onClick={() => props.onExport("csv")} disabled={!analysis}>
-            CSV
-          </button>
-          <button className={styles.button} onClick={() => props.onExport("geojson")} disabled={!analysis}>
-            GeoJSON
-          </button>
-        </div>
-        <p className={styles.blurb}>
-          Current results{scenarioActive ? " (scenario applied)" : ""}, one row per tract. The URL
-          carries the view, so it can be shared as is.
-        </p>
-      </section>
+      <SharePanel onCopy={props.onCopy} onExport={props.onExport} ready={!!analysis} scenarioActive={scenarioActive} />
 
       <footer className={styles.footer}>
         <p>
@@ -261,6 +242,69 @@ export function Sidebar(props: Props) {
         </p>
       </footer>
     </aside>
+  );
+}
+
+function SharePanel({
+  onCopy,
+  onExport,
+  ready,
+  scenarioActive,
+}: {
+  onCopy: Props["onCopy"];
+  onExport: Props["onExport"];
+  ready: boolean;
+  scenarioActive: boolean;
+}) {
+  const [status, setStatus] = useState<{ kind: "link" | "settings"; copied: boolean; text: string } | null>(null);
+  const copy = async (kind: "link" | "settings") => {
+    const r = await onCopy(kind);
+    setStatus({ kind, ...r });
+  };
+  return (
+    <section>
+      <h2>Share and export</h2>
+      <div className={styles.buttonRow}>
+        <button className={styles.button} onClick={() => copy("settings")} disabled={!ready}>
+          Copy settings for Claude
+        </button>
+        <button className={styles.button} onClick={() => copy("link")} disabled={!ready}>
+          Copy link
+        </button>
+      </div>
+      {status && status.copied && (
+        <p className={styles.blurb}>
+          {status.kind === "settings"
+            ? "Copied. Paste it into a chat that has the atl-mcp server attached, then ask your question."
+            : "Link copied."}
+        </p>
+      )}
+      {status && !status.copied && (
+        <textarea
+          className={styles.copyBox}
+          readOnly
+          value={status.text}
+          rows={4}
+          aria-label="Text to copy"
+          onFocus={(e) => e.currentTarget.select()}
+        />
+      )}
+      <p className={styles.blurb}>
+        The settings block carries the radius, weights and any scenario facilities as the exact
+        arguments the MCP tools accept, so answers in chat match the map.
+      </p>
+      <div className={styles.buttonRow}>
+        <button className={styles.button} onClick={() => onExport("csv")} disabled={!ready}>
+          CSV
+        </button>
+        <button className={styles.button} onClick={() => onExport("geojson")} disabled={!ready}>
+          GeoJSON
+        </button>
+      </div>
+      <p className={styles.blurb}>
+        Current results{scenarioActive ? " (scenario applied)" : ""}, one row per tract.
+      </p>
+    </section>
   );
 }
 

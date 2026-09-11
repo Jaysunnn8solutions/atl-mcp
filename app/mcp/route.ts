@@ -14,6 +14,7 @@ import {
 } from "@/lib/tools/find-priority-tracts";
 import { findSimilarConfig, findSimilarHandler } from "@/lib/tools/find-similar";
 import { getTractConfig, getTractHandler } from "@/lib/tools/get-tract";
+import { loadViewConfig, loadViewHandler } from "@/lib/tools/load-view";
 import { planVisitConfig, planVisitHandler } from "@/lib/tools/plan-visit";
 import { briefTractPrompt, compareCountiesPrompt, sitePlanPrompt } from "@/lib/tools/prompts";
 import { manifestResource, methodResource } from "@/lib/tools/resources";
@@ -32,6 +33,7 @@ const handler = createMcpHandler(
   (server) => {
     // Orientation
     server.registerTool("describe_analysis", describeAnalysisConfig, describeAnalysisHandler);
+    server.registerTool("load_view", loadViewConfig, loadViewHandler);
 
     // Lookup
     server.registerTool("find_priority_tracts", findPriorityTractsConfig, findPriorityTractsHandler);

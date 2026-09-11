@@ -24,6 +24,7 @@ async function main() {
 
   const calls: Array<[string, Record<string, unknown>]> = [
     ["describe_analysis", {}],
+    ["load_view", { link: "https://atl-mcp.vercel.app/#mode=delta&r=0.8&sel=13121007805&scn=clinic@33.72,-84.45" }],
     ["find_priority_tracts", { limit: 3, priorityOnly: true }],
     ["get_tract", { geoid: "13121007805" }],
     ["tracts_near", { station: "Five Points", withinKm: 1.5, limit: 3 }],

@@ -40,12 +40,8 @@ import {
 } from "./scales";
 import styles from "./GapMap.module.css";
 
-export interface Overlays {
-  rail: boolean;
-  grocery: boolean;
-  pharmacy: boolean;
-  clinic: boolean;
-}
+import type { Overlays } from "@/lib/view-state";
+export type { Overlays };
 
 export interface CoverageView {
   covered: Record<string, boolean>;

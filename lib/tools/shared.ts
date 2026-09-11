@@ -53,13 +53,22 @@ export function resolveParams(args: ToolParams): AnalysisParams {
   return toParams(analysisParamsSchema.parse(defined));
 }
 
+/** Accept either flat tool params or an already-built AnalysisParams. */
+function isAnalysisParams(x: ToolParams | AnalysisParams): x is AnalysisParams {
+  return typeof (x as AnalysisParams).weights === "object";
+}
+
 export function resolveOverrides(args: ScenarioArgs): SupplyOverrides {
   if (!args.add?.length && !args.remove?.length) return EMPTY_OVERRIDES;
   return { add: args.add ?? [], remove: args.remove ?? [] };
 }
 
-export function analyze(args: ToolParams, scenario: ScenarioArgs = {}): AnalysisResult {
-  return runAnalysisCached(resolveParams(args), resolveOverrides(scenario));
+export function analyze(
+  args: ToolParams | AnalysisParams,
+  scenario: ScenarioArgs = {}
+): AnalysisResult {
+  const params = isAnalysisParams(args) ? args : resolveParams(args);
+  return runAnalysisCached(params, resolveOverrides(scenario));
 }
 
 export const readOnly = {
