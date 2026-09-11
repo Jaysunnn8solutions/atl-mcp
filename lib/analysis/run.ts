@@ -12,6 +12,7 @@ import { clamp, mean, zscores } from "../spatial/stats";
 import { buildWeights } from "../spatial/weights";
 import { loadManifest, loadTracts } from "../data/load";
 import { biClass, PRIORITY_CLASS, tertiles } from "./classify";
+import { coverageCore, tractUnits } from "./coverage";
 import { EMPTY_OVERRIDES } from "./params";
 import { overridesKey, supplyFor } from "./supply";
 import {
@@ -58,6 +59,24 @@ function weightedComposite(
     for (let i = 0; i < n; i++) out[i] += w * series[i];
   }
   return out;
+}
+
+/** Percent of values strictly below each value (0–100), in input order. */
+export function percentileRanks(values: number[]): number[] {
+  const sorted = [...values].sort((a, b) => a - b);
+  const n = values.length;
+  if (n <= 1) return values.map(() => 50);
+  return values.map((v) => {
+    // Binary search for the first index >= v.
+    let lo = 0;
+    let hi = n;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (sorted[mid] < v) lo = mid + 1;
+      else hi = mid;
+    }
+    return Math.round((100 * lo) / (n - 1));
+  });
 }
 
 /** Tract centroids as demand points, in tract order. */
@@ -110,6 +129,21 @@ export function runAnalysis(
   const gap = need.map((v, i) => v - access[i]);
   const needT = tertiles(need);
   const accessT = tertiles(access);
+  const needPct = percentileRanks(need);
+  const accessPct = percentileRanks(access);
+
+  // Binary coverage per domain, the absolute companion to the relative index.
+  const units = tractUnits();
+  const totalPop = units.reduce((s, u) => s + u.pop, 0);
+  const coverageShare = {} as Record<AccessDomain, number>;
+  for (const domain of ACCESS_DOMAINS) {
+    const { covered } = coverageCore(units, supplyFor(domain, overrides), params.radiusKm);
+    let pop = 0;
+    units.forEach((u, i) => {
+      if (covered[i]) pop += u.pop;
+    });
+    coverageShare[domain] = totalPop > 0 ? round(pop / totalPop) : 0;
+  }
 
   const weights = buildWeights(
     props.map((p) => p.geoid),
@@ -136,6 +170,8 @@ export function runAnalysis(
       ])
     ) as Record<keyof NeedWeights, number>,
     popGrowth: growth[i] == null ? null : round(growth[i]!),
+    needPct: needPct[i],
+    accessPct: accessPct[i],
     needTertile: needT[i],
     accessTertile: accessT[i],
     biClass: biClass(needT[i], accessT[i]),
@@ -172,7 +208,13 @@ export function runAnalysis(
       tractCount: n,
       populated: props.filter((p) => p.pop > 0).length,
       priorityCount: tracts.filter((t) => t.biClass === PRIORITY_CLASS).length,
+      priorityPop: tracts.reduce(
+        (s, t, i) => s + (t.biClass === PRIORITY_CLASS ? props[i].pop : 0),
+        0
+      ),
       hotspotCount: tracts.filter((t) => t.lisa.cluster === "HH").length,
+      coverageShare,
+      totalPop,
       byCounty: [...byCountyMap.entries()]
         .map(([county, e]) => ({
           county,

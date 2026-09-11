@@ -32,6 +32,31 @@ describe("runAnalysis on committed data", () => {
     const classes = new Set(result.tracts.map((t) => t.biClass));
     expect(classes.has(PRIORITY_CLASS)).toBe(true);
     expect(result.summary.priorityCount).toBeGreaterThan(0);
+    expect(result.summary.priorityPop).toBeGreaterThan(0);
+  });
+
+  it("reports percentile ranks and absolute coverage shares", () => {
+    for (const t of result.tracts) {
+      expect(t.needPct).toBeGreaterThanOrEqual(0);
+      expect(t.needPct).toBeLessThanOrEqual(100);
+      expect(t.accessPct).toBeGreaterThanOrEqual(0);
+      expect(t.accessPct).toBeLessThanOrEqual(100);
+    }
+    const best = result.tracts.reduce((a, b) => (b.access > a.access ? b : a));
+    expect(best.accessPct).toBe(100);
+    for (const share of Object.values(result.summary.coverageShare)) {
+      expect(share).toBeGreaterThan(0);
+      expect(share).toBeLessThanOrEqual(1);
+    }
+    expect(result.summary.totalPop).toBeGreaterThan(1_000_000);
+  });
+
+  it("carries place names and nearest rail stations on every tract", () => {
+    for (const f of loadTracts().features) {
+      expect(f.properties.place.length).toBeGreaterThan(0);
+      expect(f.properties.nearestRail.name.length).toBeGreaterThan(0);
+      expect(f.properties.nearestRail.km).toBeGreaterThanOrEqual(0);
+    }
   });
 
   it("finds that gaps cluster in space", () => {

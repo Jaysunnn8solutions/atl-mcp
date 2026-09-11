@@ -131,7 +131,7 @@
 
 .tiles {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
   gap: 8px;
   margin-bottom: 10px;
 }
@@ -231,6 +231,62 @@
   line-height: 1;
   cursor: pointer;
   padding: 0 4px;
+}
+
+.where {
+  color: var(--text-secondary);
+  margin: 4px 0 10px;
+  line-height: 1.5;
+}
+
+.verdict {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-bottom: 10px;
+}
+
+.flag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: 1px;
+  margin-right: 4px;
+}
+
+.flagPriority {
+  background: #b83232;
+  color: #fff;
+}
+
+.flagWatch {
+  background: #eda100;
+  color: #0b0b0b;
+}
+
+.flagNone {
+  background: var(--grid);
+  color: var(--text-secondary);
+}
+
+.technical {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.technical summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.detail .tileValue {
+  font-size: 16px;
+  text-transform: capitalize;
 }
 
 .facts {

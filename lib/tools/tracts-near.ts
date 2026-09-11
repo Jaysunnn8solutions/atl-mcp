@@ -1,4 +1,5 @@
 import { haversineKm } from "../spatial/stats";
+import { verdict } from "../analysis/interpret";
 import { loadStops, loadTracts } from "../data/load";
 import type { AnalysisResult } from "../analysis/types";
 import { analyze, clusterWord, readOnly, text, toolParamsShape, type ToolParams, z } from "./shared";
@@ -53,8 +54,8 @@ export function tractsAround(
     ...rows.map(({ p, km }) => {
       const t = scores.get(p.geoid)!;
       return (
-        `- ${p.name}, ${p.county} (${p.geoid}) — ${km.toFixed(1)} km; gap ${t.gap.toFixed(2)}, ` +
-        `need ${t.need.toFixed(2)}, access ${t.access.toFixed(2)}, class ${t.biClass}, ${clusterWord(t)}`
+        `- ${p.name} in ${p.place}, ${p.county} (${p.geoid}) — ${km.toFixed(1)} km; ${verdict(t)} ` +
+        `${clusterWord(t)} [gap ${t.gap.toFixed(2)}, need ${t.need.toFixed(2)}, access ${t.access.toFixed(2)}, class ${t.biClass}]`
       );
     }),
   ].join("\n");

@@ -6,6 +6,10 @@ export interface TractProps {
   name: string;
   countyFips: string;
   county: string;
+  /** City or census-designated place containing the centroid, or "Unincorporated <County> County". */
+  place: string;
+  /** Nearest MARTA rail station to the centroid, straight-line. */
+  nearestRail: { name: string; km: number };
   landKm2: number;
   /** Centroid longitude/latitude, used as the demand location. */
   cx: number;
@@ -102,6 +106,9 @@ export interface TractResult {
   /** Standardized need components that fed the composite. */
   needBy: Record<keyof NeedWeights, number>;
   popGrowth: number | null;
+  /** Percent of tracts with lower need / lower access (0–100). */
+  needPct: number;
+  accessPct: number;
   needTertile: 1 | 2 | 3;
   accessTertile: 1 | 2 | 3;
   /** Bivariate class, e.g. "N3A1" = highest-need third, lowest-access third. */
@@ -114,8 +121,13 @@ export interface AnalysisSummary {
   populated: number;
   /** Tracts in the highest-need, lowest-access cell. */
   priorityCount: number;
+  /** Residents living in those tracts. */
+  priorityPop: number;
   /** Tracts in a significant high-gap cluster. */
   hotspotCount: number;
+  /** Share of residents (0–1) with at least one supply point of each type within the radius. */
+  coverageShare: Record<AccessDomain, number>;
+  totalPop: number;
   byCounty: Array<{
     county: string;
     tracts: number;

@@ -1,4 +1,5 @@
 import { PRIORITY_CLASS } from "../analysis/classify";
+import { accessRank, needRank, verdict } from "../analysis/interpret";
 import { loadTracts } from "../data/load";
 import {
   analyze,
@@ -62,9 +63,10 @@ export function findPriorityTractsHandler({ county, priorityOnly, limit, ...para
   const lines = rows.map((t, i) => {
     const p = props.get(t.geoid)!;
     return (
-      `${i + 1}. ${p.name}, ${p.county} (${t.geoid}) — gap ${t.gap.toFixed(2)}, ` +
-      `need ${t.need.toFixed(2)}, access ${t.access.toFixed(2)}, class ${t.biClass}, ` +
-      `${clusterWord(t)}; pop ${p.pop.toLocaleString("en-US")}`
+      `${i + 1}. ${p.name} in ${p.place}, ${p.county} (${t.geoid}) — ${verdict(t)} ` +
+      `${needRank(t.needPct)}, ${accessRank(t.accessPct)}; ${clusterWord(t)}; ` +
+      `pop ${p.pop.toLocaleString("en-US")}; ${p.nearestRail.km} km to ${p.nearestRail.name} station. ` +
+      `[gap ${t.gap.toFixed(2)}, need ${t.need.toFixed(2)}, access ${t.access.toFixed(2)}, class ${t.biClass}]`
     );
   });
 
@@ -72,7 +74,8 @@ export function findPriorityTractsHandler({ county, priorityOnly, limit, ...para
     [
       `Top ${rows.length} tracts by gap (${describeParams(result.params)}` +
         `${county ? `; ${county} only` : ""}${priorityOnly ? "; priority cell only" : ""}).`,
-      `Gap, need and access are in z-score units relative to all ${result.summary.tractCount} tracts.`,
+      `Ranks compare each tract with all ${result.summary.tractCount} tracts in the three counties. ` +
+        `Bracketed figures are the underlying indexes (z-scores: 0 average, +1 well above, −1 well below).`,
       ``,
       ...lines,
       ``,

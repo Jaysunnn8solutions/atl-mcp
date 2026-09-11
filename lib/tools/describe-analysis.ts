@@ -45,8 +45,16 @@ export function describeAnalysisHandler() {
       `- MARTA GTFS: ${stops.length} stops with weekday service, ${stops.filter((s) => s.rail).length} rail stations.`,
       `- Built ${m.generatedAt.slice(0, 10)}.`,
       ``,
+      `## Reading the numbers`,
+      `- Need and access are indexes where 0 is the average tract, +1 is well above average and −1 well below. ` +
+        `Tools also give each tract a rank ("worse access than 88% of tracts") and a flag: Priority (top-third need, bottom-third access), Watch, or Not flagged.`,
+      `- Priority counts are relative: lifting the worst tracts moves the cut line. For progress, use the absolute ` +
+        `measures: residents within reach of each supply type, and residents whose access improved (what_if reports both).`,
+      ``,
       `## Headline (default parameters)`,
-      `- ${r.summary.priorityCount} priority tracts, ${r.summary.hotspotCount} in significant high-gap clusters.`,
+      `- ${r.summary.priorityCount} priority tracts holding ${r.summary.priorityPop.toLocaleString("en-US")} residents; ${r.summary.hotspotCount} tracts in significant high-gap clusters.`,
+      `- Residents within ${r.params.radiusKm} km of at least one: ` +
+        Object.entries(r.summary.coverageShare).map(([d, s]) => `${d} ${Math.round(s * 100)}%`).join(", ") + `.`,
       `- Global Moran's I on the gap: ${r.global.I} (z = ${r.global.z}, p ${r.global.p === 0 ? "< 0.0001" : `= ${r.global.p}`}). ` +
         `Positive and significant means gaps cluster geographically rather than scattering.`,
       ...r.summary.byCounty.map(

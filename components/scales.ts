@@ -14,14 +14,14 @@ export const MODES: Array<{ id: Mode; label: string; blurb: string }> = [
   {
     id: "gap",
     label: "Gap",
-    blurb: "Need minus access. Red where need outruns access, blue where access outruns need.",
+    blurb: "Red where people need more than they can reach; blue where services outrun need.",
   },
-  { id: "need", label: "Need", blurb: "Composite of poverty, no-vehicle households, seniors, children and growth." },
-  { id: "access", label: "Access", blurb: "Catchment accessibility to groceries, pharmacies, clinics and transit." },
-  { id: "growth", label: "Growth", blurb: "Population change 2019 to 2024, apportioned onto 2020 tracts." },
-  { id: "clusters", label: "Clusters", blurb: "Local Moran's I on the gap. Where high gaps sit next to high gaps." },
-  { id: "coverage", label: "Coverage", blurb: "Tracts with no supply of one type within the radius, grouped into contiguous holes." },
-  { id: "delta", label: "Δ Access", blurb: "Change in the access index from the scenario, compared with the baseline." },
+  { id: "need", label: "Need", blurb: "How much each tract needs services, from poverty, car ownership, age mix and growth." },
+  { id: "access", label: "Access", blurb: "How easily residents can reach groceries, pharmacies, clinics and frequent transit." },
+  { id: "growth", label: "Growth", blurb: "How the population has changed since 2019." },
+  { id: "clusters", label: "Problem areas", blurb: "Runs of neighbouring tracts where need outruns access, so the problem is an area, not a tract." },
+  { id: "coverage", label: "Coverage", blurb: "Tracts with none of the chosen service within reach, grouped into holes." },
+  { id: "delta", label: "Δ Access", blurb: "How much your scenario changed access, tract by tract." },
 ];
 
 export interface Bin {
@@ -53,11 +53,11 @@ export const ACCESS_BINS: Bin[] = Z_LABELS.map((label, i) => ({
 
 /** Diverging: red arm = need outruns access, blue arm = access outruns need. */
 export const GAP_BINS: Bin[] = [
-  { label: "access well ahead", color: "#1c5cab", upto: -1 },
-  { label: "access ahead", color: "#9ec5f4", upto: -0.4 },
-  { label: "balanced", color: "#f0efec", upto: 0.4 },
-  { label: "need ahead", color: "#f2a4a3", upto: 1 },
-  { label: "need well ahead", color: "#b83232" },
+  { label: "well served for its need", color: "#1c5cab", upto: -1 },
+  { label: "served a little better than needed", color: "#9ec5f4", upto: -0.4 },
+  { label: "roughly balanced", color: "#f0efec", upto: 0.4 },
+  { label: "needs more than it can reach", color: "#f2a4a3", upto: 1 },
+  { label: "needs much more than it can reach", color: "#b83232" },
 ];
 
 export const GROWTH_BINS: Bin[] = [
@@ -70,11 +70,11 @@ export const GROWTH_BINS: Bin[] = [
 
 /** Diverging: blue = access improved under the scenario. */
 export const DELTA_BINS: Bin[] = [
-  { label: "fell by more than 0.5", color: "#b83232", upto: -0.5 },
-  { label: "fell", color: "#f2a4a3", upto: -0.05 },
-  { label: "no change", color: "#f0efec", upto: 0.05 },
-  { label: "rose", color: "#9ec5f4", upto: 0.5 },
-  { label: "rose by more than 0.5", color: "#1c5cab" },
+  { label: "access much worse", color: "#b83232", upto: -0.5 },
+  { label: "access slightly worse", color: "#f2a4a3", upto: -0.05 },
+  { label: "no real change", color: "#f0efec", upto: 0.05 },
+  { label: "access better", color: "#9ec5f4", upto: 0.5 },
+  { label: "access much better", color: "#1c5cab" },
 ];
 
 export const CLUSTER_COLORS: Record<Cluster, string> = {
@@ -86,11 +86,11 @@ export const CLUSTER_COLORS: Record<Cluster, string> = {
 };
 
 export const CLUSTER_BINS: Bin[] = [
-  { label: "high-gap cluster (HH)", color: CLUSTER_COLORS.HH },
-  { label: "low-gap cluster (LL)", color: CLUSTER_COLORS.LL },
-  { label: "high gap, low neighbours (HL)", color: CLUSTER_COLORS.HL },
-  { label: "low gap, high neighbours (LH)", color: CLUSTER_COLORS.LH },
-  { label: "not significant", color: CLUSTER_COLORS.ns },
+  { label: "problem area: need outruns access here and next door", color: CLUSTER_COLORS.HH },
+  { label: "well-served area", color: CLUSTER_COLORS.LL },
+  { label: "struggling tract inside a well-served area", color: CLUSTER_COLORS.HL },
+  { label: "well-served tract inside a problem area", color: CLUSTER_COLORS.LH },
+  { label: "no clear pattern", color: CLUSTER_COLORS.ns },
 ];
 
 export const COVERAGE_COLORS = {
@@ -100,9 +100,9 @@ export const COVERAGE_COLORS = {
 };
 
 export const COVERAGE_BINS: Bin[] = [
-  { label: "covered", color: COVERAGE_COLORS.covered },
-  { label: "uncovered", color: COVERAGE_COLORS.uncovered },
-  { label: "uncovered, in one of the three largest holes", color: COVERAGE_COLORS.topCluster },
+  { label: "has at least one within reach", color: COVERAGE_COLORS.covered },
+  { label: "has none within reach", color: COVERAGE_COLORS.uncovered },
+  { label: "has none, and is in one of the three biggest holes", color: COVERAGE_COLORS.topCluster },
 ];
 
 /** Point colours for supply overlays and scenario facilities (categorical slots). */

@@ -13,6 +13,20 @@ import type { GeoMatch } from "@/lib/geocode";
 import type { Overlays, MapPoint } from "./GapMap";
 import { Legend } from "./Legend";
 import {
+  accessRank,
+  accessWords,
+  changeWords,
+  clusterSentence,
+  clusteringWords,
+  flag,
+  needRank,
+  needWords,
+  pct,
+  placeLabel,
+  verdict,
+} from "@/lib/analysis/interpret";
+import { ACCESS_DOMAINS } from "@/lib/analysis/types";
+import {
   DOMAIN_COLORS,
   DOMAIN_LABELS,
   fmtCompact,
@@ -30,6 +44,23 @@ export type { Params };
 
 const DOMAINS: AccessDomain[] = ["grocery", "pharmacy", "clinic", "transit"];
 
+export interface WithinReach {
+  radiusKm: number;
+  grocery: number;
+  pharmacy: number;
+  clinic: number;
+  /** Combined weekday transit trips per hour at stops within the radius. */
+  tph: number;
+  rail: string[];
+}
+
+export interface SelectedTract {
+  props: TractProps;
+  result: TractResult | undefined;
+  baseline: TractResult | undefined;
+  withinReach: WithinReach;
+}
+
 interface Props {
   mode: Mode;
   onMode: (m: Mode) => void;
@@ -41,8 +72,12 @@ interface Props {
   onOverlays: (o: Overlays) => void;
   analysis: AnalysisResult | null;
   scenarioAnalysis: AnalysisResult | null;
+  /** Residents living in priority tracts under the shown results. */
+  priorityPop: number;
+  /** Residents whose access improved under the scenario. */
+  improvedPop: number;
   loading: boolean;
-  selected: { props: TractProps; result: TractResult | undefined; baseline: TractResult | undefined } | null;
+  selected: SelectedTract | null;
   onClearSelection: () => void;
   // Search
   onSearch: (q: string) => Promise<GeoMatch[]>;
@@ -67,21 +102,13 @@ interface Props {
   onCopy: (kind: "link" | "settings") => Promise<{ text: string; copied: boolean }>;
 }
 
-const WEIGHTS: Array<{ key: keyof Params; label: string }> = [
-  { key: "wPoverty", label: "Poverty" },
-  { key: "wNoVehicle", label: "No vehicle" },
-  { key: "wSeniors", label: "Seniors" },
-  { key: "wChildren", label: "Children" },
-  { key: "wGrowth", label: "Growth" },
+const WEIGHTS: Array<{ key: keyof Params; label: string; hint: string }> = [
+  { key: "wPoverty", label: "Poverty", hint: "share of people below the poverty line" },
+  { key: "wNoVehicle", label: "No car", hint: "households without a vehicle" },
+  { key: "wSeniors", label: "Seniors", hint: "share aged 65 and over" },
+  { key: "wChildren", label: "Children", hint: "share under 18" },
+  { key: "wGrowth", label: "Growth", hint: "population change since 2019" },
 ];
-
-const CLUSTER_WORDS: Record<TractResult["lisa"]["cluster"], string> = {
-  HH: "high-gap cluster",
-  LL: "low-gap cluster",
-  HL: "high gap, low neighbours",
-  LH: "low gap, high neighbours",
-  ns: "no significant cluster",
-};
 
 export function Sidebar(props: Props) {
   const { mode, onMode, params, onParams, analysis, scenarioAnalysis, loading, selected } = props;
@@ -94,8 +121,8 @@ export function Sidebar(props: Props) {
       <header className={styles.header}>
         <h1>Atlanta resource gap screen</h1>
         <p>
-          Where need is high or rising, and access to groceries, pharmacies, clinics and
-          transit is low. Fulton, DeKalb and Clayton counties by census tract.
+          Which neighbourhoods need groceries, pharmacies, clinics and transit the most, and how
+          far they are from having them. Fulton, DeKalb and Clayton counties, by census tract.
         </p>
       </header>
 
@@ -141,15 +168,19 @@ export function Sidebar(props: Props) {
 
       {selected ? (
         <TractDetail
-          p={selected.props}
-          r={selected.result}
-          baseline={selected.baseline}
+          sel={selected}
           scenarioActive={scenarioActive}
           vintages={analysis?.dataVintages}
           onClose={props.onClearSelection}
         />
       ) : (
-        <Summary analysis={analysis} scenario={scenarioAnalysis} loading={loading} />
+        <Summary
+          analysis={analysis}
+          scenario={scenarioAnalysis}
+          priorityPop={props.priorityPop}
+          improvedPop={props.improvedPop}
+          loading={loading}
+        />
       )}
 
       <ScenarioPanel
@@ -163,11 +194,11 @@ export function Sidebar(props: Props) {
       />
 
       <section>
-        <h2>Catchment</h2>
+        <h2>How far people can travel</h2>
         <label className={styles.range}>
           <span>
-            Radius <strong>{params.radiusKm.toFixed(2)} km</strong>
-            <em>{(params.radiusKm * 0.621371).toFixed(2)} mi</em>
+            Reach <strong>{params.radiusKm.toFixed(1)} km</strong>
+            <em>{(params.radiusKm * 0.621371).toFixed(1)} mi</em>
           </span>
           <input
             type="range"
@@ -178,6 +209,9 @@ export function Sidebar(props: Props) {
             onChange={(e) => onParams({ ...params, radiusKm: Number(e.target.value) })}
           />
         </label>
+        <p className={styles.blurb}>
+          About 0.8 km is a ten-minute walk; 1.6 km is a mile; 3 km or more assumes a car or bus.
+        </p>
         <div className={styles.segmented}>
           {(["gaussian", "binary"] as const).map((d) => (
             <button
@@ -185,16 +219,16 @@ export function Sidebar(props: Props) {
               className={params.decay === d ? styles.active : ""}
               onClick={() => onParams({ ...params, decay: d })}
             >
-              {d === "gaussian" ? "Distance decay" : "Hard cutoff"}
+              {d === "gaussian" ? "Closer counts more" : "Everything in reach counts equally"}
             </button>
           ))}
         </div>
       </section>
 
       <section>
-        <h2>Need weights</h2>
-        {WEIGHTS.map(({ key, label }) => (
-          <label key={key} className={styles.range}>
+        <h2>What counts as need</h2>
+        {WEIGHTS.map(({ key, label, hint }) => (
+          <label key={key} className={styles.range} title={hint}>
             <span>
               {label} <strong>{(params[key] as number).toFixed(1)}</strong>
             </span>
@@ -208,10 +242,11 @@ export function Sidebar(props: Props) {
             />
           </label>
         ))}
+        <p className={styles.blurb}>Higher weight means that factor counts for more of a tract&apos;s need score.</p>
       </section>
 
       <section>
-        <h2>Overlays</h2>
+        <h2>Show on the map</h2>
         {(
           [
             ["rail", "MARTA rail stations"],
@@ -235,10 +270,11 @@ export function Sidebar(props: Props) {
 
       <footer className={styles.footer}>
         <p>
-          Screening tool, not a recommendation. ACS {analysis?.dataVintages.acs ?? "…"} and{" "}
-          {analysis?.dataVintages.acsPrior ?? "…"} 5-year estimates, OpenStreetMap, MARTA GTFS.{" "}
+          A screening tool, not a recommendation. Distances are straight-line. Data: ACS{" "}
+          {analysis?.dataVintages.acs ?? "…"} and {analysis?.dataVintages.acsPrior ?? "…"} 5-year
+          estimates, OpenStreetMap, MARTA GTFS.{" "}
           <a href="https://github.com/Jaysunnn8solutions/atl-mcp">Source and method</a>. The same
-          analysis is exposed as MCP tools at <code>/mcp</code>.
+          analysis is available to AI assistants at <code>/mcp</code>.
         </p>
       </footer>
     </aside>
@@ -290,8 +326,8 @@ function SharePanel({
         />
       )}
       <p className={styles.blurb}>
-        The settings block carries the radius, weights and any scenario facilities as the exact
-        arguments the MCP tools accept, so answers in chat match the map.
+        The settings block carries the reach, weights and any scenario facilities, so answers in
+        chat match the map.
       </p>
       <div className={styles.buttonRow}>
         <button className={styles.button} onClick={() => onExport("csv")} disabled={!ready}>
@@ -400,7 +436,7 @@ function CoverageControls({
       {domain === "transit" && (
         <label className={styles.range}>
           <span>
-            Minimum service <strong>{minTph} trips/hr</strong>
+            Only count stops with at least <strong>{minTph} trips/hr</strong>
           </span>
           <input type="range" min={0} max={20} step={1} value={minTph} onChange={(e) => onMinTph(Number(e.target.value))} />
         </label>
@@ -410,15 +446,15 @@ function CoverageControls({
           <div className={styles.tiles}>
             <div className={styles.tile}>
               <span className={styles.tileValue}>{share.toFixed(0)}%</span>
-              <span className={styles.tileLabel}>residents covered</span>
+              <span className={styles.tileLabel}>of residents have one in reach</span>
             </div>
             <div className={styles.tile}>
               <span className={styles.tileValue}>{fmtCompact(coverage.totalPop - coverage.coveredPop)}</span>
-              <span className={styles.tileLabel}>residents uncovered</span>
+              <span className={styles.tileLabel}>residents have none</span>
             </div>
             <div className={styles.tile}>
               <span className={styles.tileValue}>{coverage.clusters.length}</span>
-              <span className={styles.tileLabel}>holes</span>
+              <span className={styles.tileLabel}>separate holes</span>
             </div>
           </div>
           {coverage.clusters.length > 0 && (
@@ -463,10 +499,10 @@ function ScenarioPanel({
   const [k, setK] = useState(3);
   return (
     <section>
-      <h2>Scenario</h2>
+      <h2>Try adding something</h2>
       <p className={styles.blurb}>
-        Pick a type, then click the map to place a hypothetical facility. Or let the solver
-        propose sites that cover the most uncovered need.
+        Pick a type, then click the map to place a new facility. Or let the solver propose
+        locations that reach the most people who have none today.
       </p>
       <div className={styles.chips}>
         {DOMAINS.map((d) => (
@@ -532,105 +568,143 @@ function ScenarioPanel({
 function Summary({
   analysis,
   scenario,
+  priorityPop,
+  improvedPop,
   loading,
 }: {
   analysis: AnalysisResult | null;
   scenario: AnalysisResult | null;
+  priorityPop: number;
+  improvedPop: number;
   loading: boolean;
 }) {
   if (!analysis) {
     return (
       <section>
-        <h2>Summary</h2>
+        <h2>The picture</h2>
         <p className={styles.blurb}>{loading ? "Computing…" : "No results."}</p>
       </section>
     );
   }
   const shown = scenario ?? analysis;
-  const s = shown.summary;
-  const arrow = (a: number, b: number, digits = 0) =>
-    scenario ? (
-      <span className={styles.muted}>
-        {" "}
-        {a.toFixed(digits)} →
-      </span>
-    ) : null;
+  const r = shown.params.radiusKm;
   return (
     <section aria-busy={loading}>
       <h2>
-        Summary{scenario && <span className={styles.spinner}>scenario</span>}
+        {scenario ? "With your scenario" : "The picture"}
         {loading && <span className={styles.spinner}>updating</span>}
       </h2>
-      <div className={styles.tiles}>
-        <div className={styles.tile}>
-          <span className={styles.tileValue}>
-            {arrow(analysis.summary.priorityCount, s.priorityCount)}
-            {s.priorityCount}
-          </span>
-          <span className={styles.tileLabel}>priority tracts</span>
+      {scenario ? (
+        <div className={styles.tiles}>
+          <div className={styles.tile}>
+            <span className={styles.tileValue}>{fmtCompact(improvedPop)}</span>
+            <span className={styles.tileLabel}>residents gain access</span>
+          </div>
+          <div className={styles.tile}>
+            <span className={styles.tileValue}>
+              {analysis.summary.priorityCount} → {shown.summary.priorityCount}
+            </span>
+            <span className={styles.tileLabel}>priority tracts</span>
+          </div>
+          <div className={styles.tile}>
+            <span className={styles.tileValue}>{fmtCompact(priorityPop)}</span>
+            <span className={styles.tileLabel}>residents still in them</span>
+          </div>
         </div>
-        <div className={styles.tile}>
-          <span className={styles.tileValue}>
-            {arrow(analysis.summary.hotspotCount, s.hotspotCount)}
-            {s.hotspotCount}
-          </span>
-          <span className={styles.tileLabel}>in high-gap clusters</span>
+      ) : (
+        <div className={styles.tiles}>
+          <div className={styles.tile}>
+            <span className={styles.tileValue}>{shown.summary.priorityCount}</span>
+            <span className={styles.tileLabel}>priority tracts</span>
+          </div>
+          <div className={styles.tile}>
+            <span className={styles.tileValue}>{fmtCompact(priorityPop)}</span>
+            <span className={styles.tileLabel}>residents in them</span>
+          </div>
+          <div className={styles.tile}>
+            <span className={styles.tileValue}>{shown.summary.hotspotCount}</span>
+            <span className={styles.tileLabel}>tracts in problem areas</span>
+          </div>
         </div>
-        <div className={styles.tile}>
-          <span className={styles.tileValue}>{shown.global.I.toFixed(2)}</span>
-          <span className={styles.tileLabel}>
-            Moran&apos;s I {shown.global.p < 0.01 ? "(p < 0.01)" : `(p = ${shown.global.p.toFixed(2)})`}
-          </span>
-        </div>
-      </div>
+      )}
+      <p className={styles.blurb}>
+        A priority tract is in the neediest third and the worst-served third at once.{" "}
+        {clusteringWords(shown.global.I, shown.global.p)}
+      </p>
+
+      <h3>Residents with at least one within {r.toFixed(1)} km</h3>
+      <table className={styles.table}>
+        <thead>
+          <tr>
+            <th>Type</th>
+            {scenario && <th>Before</th>}
+            <th>{scenario ? "After" : "Share"}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ACCESS_DOMAINS.map((d) => (
+            <tr key={d}>
+              <td>{DOMAIN_LABELS[d].replace(" stop", "")}</td>
+              {scenario && <td>{pct(analysis.summary.coverageShare[d])}</td>}
+              <td>
+                <strong>{pct(shown.summary.coverageShare[d])}</strong>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {scenario && (
+        <p className={styles.blurb}>
+          Judge a scenario by these shares and by residents gaining access. The priority count
+          is relative, so it moves less: lifting the worst tracts moves the cut line too.
+        </p>
+      )}
+
+      <h3>By county</h3>
       <table className={styles.table}>
         <thead>
           <tr>
             <th>County</th>
             <th>Tracts</th>
             <th>Priority</th>
-            <th>Need</th>
-            <th>Access</th>
           </tr>
         </thead>
         <tbody>
-          {s.byCounty.map((c) => (
+          {shown.summary.byCounty.map((c) => (
             <tr key={c.county}>
               <td>{c.county}</td>
               <td>{c.tracts}</td>
               <td>{c.priority}</td>
-              <td>{fmtZ(c.meanNeed)}</td>
-              <td>{fmtZ(c.meanAccess)}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      <p className={styles.blurb}>Click a tract for its profile.</p>
+      <p className={styles.blurb}>Click a tract for its story.</p>
     </section>
   );
 }
 
 function change(cur: number | null, prior: number | null): string {
   if (cur == null || prior == null || prior === 0) return "";
-  const pct = ((cur - prior) / prior) * 100;
-  return ` (${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%)`;
+  const pctChange = ((cur - prior) / prior) * 100;
+  return ` (${pctChange >= 0 ? "+" : ""}${pctChange.toFixed(1)}%)`;
 }
 
 function TractDetail({
-  p,
-  r,
-  baseline,
+  sel,
   scenarioActive,
   vintages,
   onClose,
 }: {
-  p: TractProps;
-  r: TractResult | undefined;
-  baseline: TractResult | undefined;
+  sel: SelectedTract;
   scenarioActive: boolean;
   vintages: AnalysisResult["dataVintages"] | undefined;
   onClose: () => void;
 }) {
+  const { props: p, result: r, baseline: b, withinReach: w } = sel;
+  const f = r ? flag(r) : null;
+  const flagClass =
+    f === "Priority" ? styles.flagPriority : f === "Watch" ? styles.flagWatch : styles.flagNone;
   return (
     <section className={styles.detail}>
       <div className={styles.detailHead}>
@@ -639,35 +713,56 @@ function TractDetail({
           ×
         </button>
       </div>
-      <p className={styles.blurb}>
-        {p.county} County · {p.geoid} · {p.landKm2} km²
+      <p className={styles.where}>
+        {placeLabel(p.place, p.county)} · {fmtNum(p.pop)} residents
+        {p.nearestRail && (
+          <>
+            <br />
+            {p.nearestRail.km} km to {p.nearestRail.name} station
+          </>
+        )}
       </p>
+
       {r && (
-        <div className={styles.tiles}>
-          <div className={styles.tile}>
-            <span className={styles.tileValue}>{fmtZ(r.need)}</span>
-            <span className={styles.tileLabel}>need · tertile {r.needTertile}</span>
+        <>
+          <p className={styles.verdict}>
+            <span className={`${styles.flag} ${flagClass}`}>{f}</span> {verdict(r)}
+          </p>
+          <div className={styles.tiles}>
+            <div className={styles.tile}>
+              <span className={styles.tileValue}>{needWords(r.needPct).replace(" need", "")}</span>
+              <span className={styles.tileLabel}>need · {needRank(r.needPct)}</span>
+            </div>
+            <div className={styles.tile}>
+              <span className={styles.tileValue}>{accessWords(r.accessPct).replace(" access", "")}</span>
+              <span className={styles.tileLabel}>access · {accessRank(r.accessPct)}</span>
+            </div>
           </div>
-          <div className={styles.tile}>
-            <span className={styles.tileValue}>{fmtZ(r.access)}</span>
-            <span className={styles.tileLabel}>
-              access · tertile {r.accessTertile}
-              {scenarioActive && baseline ? ` · was ${fmtZ(baseline.access)}` : ""}
-            </span>
-          </div>
-          <div className={styles.tile}>
-            <span className={styles.tileValue}>{fmtZ(r.gap)}</span>
-            <span className={styles.tileLabel}>gap · {r.biClass}</span>
-          </div>
-        </div>
+          {scenarioActive && b && (
+            <p className={styles.blurb}>
+              With your scenario: {changeWords(r.access - b.access)}. Before it, {accessRank(b.accessPct)}
+              {flag(b) !== f ? `; flag changed from ${flag(b)} to ${f}` : ""}.
+            </p>
+          )}
+          <p className={styles.blurb}>{clusterSentence(r.lisa.cluster)}</p>
+        </>
       )}
-      {r && (
-        <p className={styles.blurb}>
-          {CLUSTER_WORDS[r.lisa.cluster]}
-          {r.lisa.cluster !== "ns" && ` (local I ${r.lisa.I.toFixed(2)}, p ${r.lisa.p.toFixed(3)})`}
-          {r.biClass === "N3A1" && ". Priority cell."}
-        </p>
-      )}
+
+      <h3>Within {w.radiusKm.toFixed(1)} km{scenarioActive ? " (including your scenario)" : ""}</h3>
+      <dl className={styles.facts}>
+        <dt>Groceries</dt>
+        <dd>{w.grocery}</dd>
+        <dt>Pharmacies</dt>
+        <dd>{w.pharmacy}</dd>
+        <dt>Clinics and hospitals</dt>
+        <dd>{w.clinic}</dd>
+        <dt>Bus and rail trips per hour</dt>
+        <dd>{Math.round(w.tph)}</dd>
+        <dt>Rail stations</dt>
+        <dd>{w.rail.length ? w.rail.map((s) => s.replace(/ STATION$/i, "")).join(", ") : "none"}</dd>
+      </dl>
+
+      <h3>People and money</h3>
       <dl className={styles.facts}>
         <dt>Population</dt>
         <dd>
@@ -689,33 +784,53 @@ function TractDetail({
           {fmtMoney(p.medianRent)}
           {change(p.medianRent, p.medianRent2019)}
         </dd>
-        <dt>Poverty</dt>
+        <dt>Below poverty line</dt>
         <dd>{fmtPct(p.povertyRate)}</dd>
-        <dt>No vehicle</dt>
+        <dt>Households with no car</dt>
         <dd>{fmtPct(p.noVehicleRate)}</dd>
-        <dt>Age 65+</dt>
+        <dt>Age 65 and over</dt>
         <dd>{fmtPct(p.seniorShare)}</dd>
         <dt>Under 18</dt>
         <dd>{fmtPct(p.childShare)}</dd>
-        <dt>Vacancy</dt>
+        <dt>Vacant homes</dt>
         <dd>{fmtPct(p.vacancyRate)}</dd>
       </dl>
+      <p className={styles.blurb}>
+        Changes in brackets compare {vintages?.acsPrior ?? "2019"} with {vintages?.acs ?? "2024"}.
+      </p>
+
       {r && (
-        <>
-          <h3>Access per 1,000 residents</h3>
+        <details className={styles.technical}>
+          <summary>Technical detail</summary>
           <dl className={styles.facts}>
+            <dt>Need index</dt>
+            <dd>{fmtZ(r.need)}</dd>
+            <dt>Access index</dt>
+            <dd>
+              {fmtZ(r.access)}
+              {scenarioActive && b ? ` (was ${fmtZ(b.access)})` : ""}
+            </dd>
+            <dt>Gap</dt>
+            <dd>{fmtZ(r.gap)}</dd>
+            <dt>Class</dt>
+            <dd>{r.biClass}</dd>
+            <dt>Local Moran&apos;s I</dt>
+            <dd>
+              {r.lisa.I.toFixed(2)} (p {r.lisa.p.toFixed(3)}, {r.lisa.cluster})
+            </dd>
             {(Object.entries(r.accessBy) as Array<[string, number]>).map(([k, v]) => (
               <div key={k} className={styles.factRow}>
-                <dt>{k}</dt>
+                <dt>2SFCA {k} per 1,000</dt>
                 <dd>{v.toFixed(3)}</dd>
               </div>
             ))}
           </dl>
-        </>
+          <p className={styles.blurb}>
+            Indexes are z-scores across all 600 tracts: 0 is average, +1 well above, −1 well below.
+            GEOID {p.geoid}, {p.landKm2} km².
+          </p>
+        </details>
       )}
-      <p className={styles.blurb}>
-        Change figures compare ACS {vintages?.acsPrior ?? "2019"} to {vintages?.acs ?? "2024"}.
-      </p>
     </section>
   );
 }

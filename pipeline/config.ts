@@ -18,6 +18,8 @@ export const CACHE_DIR = path.join(ROOT, "pipeline", "cache");
 export const DATA_DIR = path.join(ROOT, "data");
 
 export const TRACT_SHAPE_URL = `https://www2.census.gov/geo/tiger/GENZ${BOUNDARY_VINTAGE}/shp/cb_${BOUNDARY_VINTAGE}_${STATE_FIPS}_tract_500k.zip`;
+/** Incorporated places and census-designated places, for "which city is this tract in". */
+export const PLACE_SHAPE_URL = `https://www2.census.gov/geo/tiger/GENZ${BOUNDARY_VINTAGE}/shp/cb_${BOUNDARY_VINTAGE}_${STATE_FIPS}_place_500k.zip`;
 export const TRACT_RELATIONSHIP_URL = `https://www2.census.gov/geo/docs/maps-data/data/rel2020/tract/tab20_tract20_tract10_st${STATE_FIPS}.txt`;
 export const MARTA_GTFS_URL =
   "https://www.itsmarta.com/google_transit_feed/google_transit.zip";

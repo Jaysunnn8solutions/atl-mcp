@@ -3,8 +3,10 @@
  *
  * Downloads the Census cartographic boundary shapefile for Georgia, keeps
  * the study counties, computes queen-contiguity neighbors on the
- * full-precision geometry, then truncates coordinates for a smaller file.
- * Neighbors are computed before truncation so shared borders still touch.
+ * full-precision geometry, labels each tract with the city or
+ * census-designated place its centroid falls in, then truncates
+ * coordinates for a smaller file. Neighbors are computed before
+ * truncation so shared borders still touch.
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -12,7 +14,7 @@ import path from "node:path";
 import shp from "shpjs";
 import * as turf from "@turf/turf";
 import type { Feature, FeatureCollection, MultiPolygon, Polygon } from "geojson";
-import { CACHE_DIR, COUNTIES, TRACT_SHAPE_URL } from "./config";
+import { CACHE_DIR, COUNTIES, PLACE_SHAPE_URL, TRACT_SHAPE_URL } from "./config";
 import { fetchCached, log } from "./lib/http";
 
 export interface TractGeo {
@@ -20,6 +22,8 @@ export interface TractGeo {
   name: string;
   countyFips: string;
   county: string;
+  /** City or census-designated place containing the centroid, or "Unincorporated <County> County". */
+  place: string;
   landKm2: number;
   cx: number;
   cy: number;
@@ -35,13 +39,22 @@ interface CbProps {
   ALAND: number;
 }
 
-export async function buildTracts(): Promise<TractGeo[]> {
-  const zip = await fetchCached(TRACT_SHAPE_URL, path.basename(TRACT_SHAPE_URL));
+interface PlaceProps {
+  NAME: string;
+  LSAD: string;
+}
+
+async function loadShapes<P>(url: string): Promise<FeatureCollection<Polygon | MultiPolygon, P>> {
+  const zip = await fetchCached(url, path.basename(url));
   const parsed = await shp(zip);
-  const fc = (Array.isArray(parsed) ? parsed[0] : parsed) as FeatureCollection<
-    Polygon | MultiPolygon,
-    CbProps
-  >;
+  return (Array.isArray(parsed) ? parsed[0] : parsed) as FeatureCollection<Polygon | MultiPolygon, P>;
+}
+
+export async function buildTracts(): Promise<TractGeo[]> {
+  const [fc, places] = await Promise.all([
+    loadShapes<CbProps>(TRACT_SHAPE_URL),
+    loadShapes<PlaceProps>(PLACE_SHAPE_URL),
+  ]);
 
   const countyNames = new Map(COUNTIES.map((c) => [c.fips, c.name]));
   const features = fc.features.filter((f) => countyNames.has(f.properties.COUNTYFP));
@@ -66,17 +79,35 @@ export async function buildTracts(): Promise<TractGeo[]> {
   const islands = neighbors.filter((n) => n.length === 0).length;
   log(`contiguity: ${pairs} candidate pairs checked, ${islands} islands`);
 
+  // Place lookup: bbox prefilter then point-in-polygon on the centroid.
+  const placeBoxes = places.features.map((f) => turf.bbox(f));
+  const placeFor = (lon: number, lat: number, county: string): string => {
+    for (let k = 0; k < places.features.length; k++) {
+      const b = placeBoxes[k];
+      if (lon < b[0] || lon > b[2] || lat < b[1] || lat > b[3]) continue;
+      if (turf.booleanPointInPolygon([lon, lat], places.features[k])) {
+        return places.features[k].properties.NAME;
+      }
+    }
+    return `Unincorporated ${county} County`;
+  };
+
+  const placeCounts = new Map<string, number>();
   const out: TractGeo[] = features.map((f, i) => {
     const centroid = turf.centerOfMass(f).geometry.coordinates;
     const truncated = turf.truncate(f as Feature<Polygon | MultiPolygon>, {
       precision: 5,
       mutate: false,
     });
+    const county = countyNames.get(f.properties.COUNTYFP)!;
+    const place = placeFor(centroid[0], centroid[1], county);
+    placeCounts.set(place, (placeCounts.get(place) ?? 0) + 1);
     return {
       geoid: f.properties.GEOID,
       name: f.properties.NAMELSAD,
       countyFips: f.properties.COUNTYFP,
-      county: countyNames.get(f.properties.COUNTYFP)!,
+      county,
+      place,
       landKm2: Math.round((f.properties.ALAND / 1e6) * 1000) / 1000,
       cx: Math.round(centroid[0] * 1e6) / 1e6,
       cy: Math.round(centroid[1] * 1e6) / 1e6,
@@ -84,6 +115,7 @@ export async function buildTracts(): Promise<TractGeo[]> {
       geometry: truncated.geometry,
     };
   });
+  log(`places: ${placeCounts.size} distinct; top: ${[...placeCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, v]) => `${k} ${v}`).join(", ")}`);
 
   mkdirSync(CACHE_DIR, { recursive: true });
   writeFileSync(path.join(CACHE_DIR, "tracts-geo.json"), JSON.stringify(out));

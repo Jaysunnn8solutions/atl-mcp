@@ -11,6 +11,7 @@ import { runAnalysisCached } from "@/lib/analysis/run";
  */
 export function GET(request: Request) {
   const query = Object.fromEntries(new URL(request.url).searchParams);
+  delete query.v; // cache-busting version tag from the client, not a parameter
   try {
     const params = parseParams(query);
     return Response.json(runAnalysisCached(params), {

@@ -14,6 +14,7 @@ export function handleApiError(err: unknown): Response {
 /** Merge query-string params with an optional JSON body into one object. */
 export async function requestInput(request: Request): Promise<Record<string, unknown>> {
   const query = Object.fromEntries(new URL(request.url).searchParams);
+  delete query.v; // cache-busting version tag from the client, not a parameter
   if (request.method === "POST") {
     const body = (await request.json()) as Record<string, unknown>;
     return { ...query, ...body };

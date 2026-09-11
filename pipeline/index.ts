@@ -20,7 +20,7 @@ async function main() {
     buildPois(tracts),
     buildTransit(),
   ]);
-  assemble(tracts, acs, { pois: pois.length, stops: stops.length });
+  assemble(tracts, acs, stops, { pois: pois.length, stops: stops.length });
   log(`done in ${((Date.now() - started) / 1000).toFixed(1)}s`);
 }
 

@@ -19,11 +19,14 @@ import { download, toCsv, toGeoJson } from "./exportData";
 import type { Mode } from "./scales";
 import { DOMAIN_LABELS } from "./scales";
 import { currentLink, readHash, writeHash } from "./urlState";
+import { haversineKm } from "@/lib/spatial/stats";
+import { API_VERSION } from "@/lib/api-version";
 import { viewToClipboardText } from "@/lib/view-state";
 import styles from "./Dashboard.module.css";
 
 function queryFor(p: Params): string {
   const q = new URLSearchParams();
+  q.set("v", API_VERSION);
   q.set("radiusKm", p.radiusKm.toFixed(2));
   q.set("decay", p.decay);
   q.set("wPoverty", String(p.wPoverty));
@@ -107,7 +110,11 @@ export function Dashboard() {
 
   // Data.
   const [tracts, setTracts] = useState<TractCollection | null>(null);
-  const [supply, setSupply] = useState<{ pois: Poi[]; railStations: Stop[] }>({ pois: [], railStations: [] });
+  const [supply, setSupply] = useState<{ pois: Poi[]; railStations: Stop[]; stops: Stop[] }>({
+    pois: [],
+    railStations: [],
+    stops: [],
+  });
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [scenarioAnalysis, setScenarioAnalysis] = useState<AnalysisResult | null>(null);
   const [coverageResult, setCoverageResult] = useState<CoverageResult | null>(null);
@@ -127,13 +134,13 @@ export function Dashboard() {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      getJson<TractCollection>("/api/tracts"),
-      getJson<{ pois: Poi[]; railStations: Stop[] }>("/api/pois"),
+      getJson<TractCollection>(`/api/tracts?v=${API_VERSION}`),
+      getJson<{ pois: Poi[]; railStations: Stop[]; stops: Stop[] }>(`/api/pois?v=${API_VERSION}`),
     ])
       .then(([t, s]) => {
         if (cancelled) return;
         setTracts(t);
-        setSupply({ pois: s.pois, railStations: s.railStations });
+        setSupply({ pois: s.pois, railStations: s.railStations, stops: s.stops });
       })
       .catch((e: unknown) => !cancelled && setError(e instanceof Error ? e.message : String(e)));
     return () => {
@@ -254,8 +261,38 @@ export function Dashboard() {
     if (!selected || !tracts) return null;
     const f = tracts.features.find((x) => x.properties.geoid === selected);
     if (!f) return null;
-    return { props: f.properties, result: results.get(selected), baseline: baselineResults.get(selected) };
-  }, [selected, tracts, results, baselineResults]);
+    const p = f.properties;
+    const r = params.radiusKm;
+    const near = (lon: number, lat: number) => haversineKm(p.cx, p.cy, lon, lat) <= r;
+    const count = (cat: AccessDomain) =>
+      supply.pois.filter((x) => x.category === cat && near(x.lon, x.lat)).length +
+      scenario.filter((x) => x.domain === cat && near(x.lon, x.lat)).length;
+    const tph =
+      (supply.stops ?? []).filter((s) => near(s.lon, s.lat)).reduce((sum, s) => sum + s.tph, 0) +
+      scenario.filter((x) => x.domain === "transit" && near(x.lon, x.lat)).reduce((sum, x) => sum + (x.capacity ?? 6), 0);
+    const rail = supply.railStations.filter((s) => near(s.lon, s.lat)).map((s) => s.name);
+    return {
+      props: p,
+      result: results.get(selected),
+      baseline: baselineResults.get(selected),
+      withinReach: { radiusKm: r, grocery: count("grocery"), pharmacy: count("pharmacy"), clinic: count("clinic"), tph, rail },
+    };
+  }, [selected, tracts, results, baselineResults, params.radiusKm, supply, scenario]);
+
+  const priorityPopShown = useMemo(() => {
+    if (!tracts || !shown) return 0;
+    const pop = new Map(tracts.features.map((f) => [f.properties.geoid, f.properties.pop]));
+    return shown.tracts.reduce((s, t) => s + (t.biClass === "N3A1" ? (pop.get(t.geoid) ?? 0) : 0), 0);
+  }, [tracts, shown]);
+  const improvedPop = useMemo(() => {
+    if (!tracts || !deltaAccess) return 0;
+    const pop = new Map(tracts.features.map((f) => [f.properties.geoid, f.properties.pop]));
+    let s = 0;
+    deltaAccess.forEach((d, g) => {
+      if (d > 0.02) s += pop.get(g) ?? 0;
+    });
+    return s;
+  }, [tracts, deltaAccess]);
 
   // Actions.
   const onSearch = useCallback(async (q: string) => {
@@ -342,6 +379,8 @@ export function Dashboard() {
         onOverlays={setOverlays}
         analysis={analysis}
         scenarioAnalysis={activeScenario}
+        priorityPop={priorityPopShown}
+        improvedPop={improvedPop}
         loading={loading}
         selected={selectedInfo}
         onClearSelection={() => setSelected(null)}

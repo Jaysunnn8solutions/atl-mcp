@@ -1,6 +1,8 @@
 import { overridesSchema } from "../analysis/params";
 import { loadTracts } from "../data/load";
 import { PRIORITY_CLASS } from "../analysis/classify";
+import { pct } from "../analysis/interpret";
+import { ACCESS_DOMAINS } from "../analysis/types";
 import {
   analyze,
   describeParams,
@@ -76,26 +78,37 @@ export function whatIfHandler({ add, remove, limit, ...params }: Args) {
     const p = props.get(d.geoid)!;
     const cls = d.from.biClass === d.to.biClass ? d.to.biClass : `${d.from.biClass} → ${d.to.biClass}`;
     return (
-      `- ${p.name}, ${p.county} (${d.geoid}): access ${d.from.access.toFixed(2)} → ${d.to.access.toFixed(2)} ` +
+      `- ${p.name} in ${p.place}, ${p.county} (${d.geoid}): access ${d.from.access.toFixed(2)} → ${d.to.access.toFixed(2)} ` +
       `(${d.dAccess >= 0 ? "+" : ""}${d.dAccess.toFixed(2)}), gap ${d.to.gap.toFixed(2)}, class ${cls}; pop ${fmtInt(p.pop)}`
     );
   });
+
+  const cov = ACCESS_DOMAINS.map(
+    (d) =>
+      `${d} ${pct(base.summary.coverageShare[d])} → ${pct(scen.summary.coverageShare[d])}`
+  ).join(", ");
 
   return text(
     [
       `Scenario result (${describeParams(base.params)}).${describeScenario(overrides)}`,
       ``,
-      `- Tracts with higher access: ${gained.length} (${fmtInt(popGained)} residents); lower: ${lost.length}.`,
+      `## What changed, in absolute terms`,
+      `- Residents whose access improved: ${fmtInt(popGained)} in ${gained.length} tracts` +
+        (lost.length ? ` (${lost.length} tracts slipped slightly because access is measured relative to all tracts)` : "") +
+        `.`,
+      `- Residents within ${base.params.radiusKm} km of at least one: ${cov}.`,
+      ``,
+      `## Relative measures (these move less, by construction)`,
       `- Priority tracts: ${base.summary.priorityCount} → ${scen.summary.priorityCount} ` +
-        `(${leftPriority.length} left the priority cell, ${enteredPriority.length} entered it).`,
+        `(${leftPriority.length} left the priority cell, ${enteredPriority.length} entered it). ` +
+        `Priority means "bottom third on access", so lifting the bottom moves the cut line too; ` +
+        `judge progress by the absolute figures above.`,
+      `- Residents in priority tracts: ${fmtInt(base.summary.priorityPop)} → ${fmtInt(scen.summary.priorityPop)}.`,
       `- High-gap cluster tracts: ${base.summary.hotspotCount} → ${scen.summary.hotspotCount}.`,
       `- Global Moran's I on the gap: ${base.global.I} → ${scen.global.I}.`,
       ``,
       `Largest access changes:`,
       ...(lines.length ? lines : ["- none beyond rounding"]),
-      ``,
-      `Access is standardized across all tracts, so adding supply in one place can nudge ` +
-        `others down slightly by shifting the mean; tertile boundaries can move for the same reason.`,
     ].join("\n")
   );
 }

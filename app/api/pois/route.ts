@@ -7,6 +7,7 @@ export function GET() {
     {
       pois: loadPois(),
       railStations: stops.filter((s) => s.rail),
+      stops,
       stopCount: stops.length,
     },
     { headers: { "Cache-Control": "public, max-age=3600, s-maxage=86400" } }

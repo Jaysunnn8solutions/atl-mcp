@@ -19,3 +19,8 @@
 .tooltip :global(.leaflet-tooltip-tip) {
   display: none;
 }
+
+.tooltipMuted {
+  color: var(--muted);
+  font-size: 11px;
+}

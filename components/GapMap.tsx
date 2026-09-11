@@ -35,9 +35,9 @@ import {
   NEED_BINS,
   NO_DATA_COLOR,
   fmtNum,
-  fmtZ,
   type Mode,
 } from "./scales";
+import { accessWords, changeWords, flag, needWords, placeLabel } from "@/lib/analysis/interpret";
 import styles from "./GapMap.module.css";
 
 import type { Overlays } from "@/lib/view-state";
@@ -139,22 +139,22 @@ function tooltipHtml(
   delta: number | undefined,
   cov: CoverageView | null
 ): string {
-  const head = `<strong>${p.name}</strong><br/>${p.county} County · pop ${fmtNum(p.pop)}`;
+  const head = `<strong>${p.name}</strong><br/>${placeLabel(p.place, p.county)} · ${fmtNum(p.pop)} residents`;
   if (!r) return head;
   const extra: string[] = [];
-  if (delta != null) extra.push(`Δ access ${fmtZ(delta)}`);
+  if (delta != null) extra.push(changeWords(delta));
   if (cov) {
     extra.push(
       cov.covered[p.geoid]
-        ? "covered"
-        : `uncovered${cov.clusterOf[p.geoid] ? ` · hole #${cov.clusterOf[p.geoid]}` : ""}`
+        ? "has one within reach"
+        : `none within reach${cov.clusterOf[p.geoid] ? ` · hole #${cov.clusterOf[p.geoid]}` : ""}`
     );
   }
   return (
     `${head}<br/>` +
-    `need ${fmtZ(r.need)} · access ${fmtZ(r.access)} · gap ${fmtZ(r.gap)}<br/>` +
-    `class ${r.biClass}${r.biClass === "N3A1" ? " (priority)" : ""} · cluster ${r.lisa.cluster}` +
-    (extra.length ? `<br/>${extra.join(" · ")}` : "")
+    `<strong>${flag(r)}</strong> · ${needWords(r.needPct)} · ${accessWords(r.accessPct)}` +
+    (extra.length ? `<br/>${extra.join(" · ")}` : "") +
+    `<br/><span class="${styles.tooltipMuted}">click for details</span>`
   );
 }
 
